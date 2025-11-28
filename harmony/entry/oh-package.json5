@@ -1,0 +1,10 @@
+{
+  name: 'entry',
+  version: '1.0.0',
+  description: 'Entry module for AI Medical Consultation HarmonyOS application',
+  main: '',
+  author: '',
+  license: '',
+  devDependencies: {},
+  dependencies: {}
+}

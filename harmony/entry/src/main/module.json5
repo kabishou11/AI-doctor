@@ -1,0 +1,24 @@
+{
+  module: {
+    name: 'entry',
+    type: 'entry',
+    srcEntrance: './ets/Application/MyAbilityStage.ts',
+    description: '$string:module_desc',
+    mainElement: 'MyAbility',
+    deviceTypes: [
+      'tablet',
+      'default'
+    ],
+    abilities: [
+      {
+        name: 'MyAbility',
+        srcEntrance: './ets/ability/MyAbility.ts',
+        description: '$string:ability_desc',
+        uiAbilityLaunchType: 'singleton',
+        launchType: 'singleton',
+        orientation: 'portrait_dynamic'
+      }
+    ],
+    requestPermissions: []
+  }
+}

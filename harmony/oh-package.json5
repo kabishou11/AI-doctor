@@ -1,0 +1,14 @@
+{
+  name: 'ai-medical-consultation-harmony',
+  version: '1.0.0',
+  description: 'HarmonyOS Stage application for AI Medical Consultation Panel',
+  main: '',
+  author: '',
+  license: '',
+  devDependencies: {
+    '@ohos/hvigor': '4.9.1',
+    '@ohos/hvigor-ohos-plugin': '4.9.1',
+    '@ohos/hvigor-arkts-plugin': '4.9.1'
+  },
+  dependencies: {}
+}

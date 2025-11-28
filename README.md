@@ -83,6 +83,77 @@ npm run build
 
 > ⚠️ 注意：生产环境默认直接向第三方 API 发起请求，如需继续通过本地代理，请在构建时设置环境变量 `VITE_ENABLE_PROXY=true`，并确保部署环境提供 `/api-proxy` 的转发能力。
 
+## 🎯 HarmonyOS 应用
+
+本项目同时提供 HarmonyOS Harmony Stage 应用版本，可在 HarmonyOS 设备上运行。
+
+### HarmonyOS 应用快速开始
+
+HarmonyOS 应用位于 `harmony/` 目录，采用 ArkTS + ArkUI 开发。
+
+#### 前置要求
+
+- DevEco Studio 5.0 或更新版本
+- HarmonyOS SDK 4.0 或更新版本
+- Node.js 16.0 或更新版本
+
+#### 构建应用
+
+```bash
+cd harmony
+npm install
+# 或使用 pnpm
+pnpm install
+
+# 使用 DevEco Studio 构建（推荐）
+# 或使用命令行构建
+hvigor assembleEntry
+```
+
+#### 运行应用
+
+1. **使用 DevEco Studio**
+   - 在 DevEco Studio 中打开 `harmony` 目录
+   - 连接 HarmonyOS 设备或启动模拟器
+   - 点击运行按钮
+
+2. **使用命令行**
+   ```bash
+   cd harmony
+   hvigor install -m entry
+   hdc shell am start -n com.example.harmonymedical/.MyAbility
+   ```
+
+#### 项目结构
+
+```
+harmony/
+├── entry/                   # 主模块
+│   └── src/main/
+│       ├── ets/             # ArkTS 源代码
+│       │   ├── pages/       # 页面
+│       │   ├── components/  # UI 组件
+│       │   └── utils/       # 工具函数
+│       └── resources/       # 资源文件
+├── hvigorfile.ts           # 构建配置
+└── README.md               # HarmonyOS 详细文档
+```
+
+详见 [`harmony/README.md`](harmony/README.md) 了解更多信息。
+
+#### 并行运行 Web 和 HarmonyOS 版本
+
+可以同时运行 Web 和 HarmonyOS 版本：
+
+```bash
+# 终端 1：运行 Web 版本
+pnpm dev
+
+# 终端 2：在 HarmonyOS 设备上运行
+cd harmony
+hvigor install -m entry
+```
+
 ## 📚 使用指南
 
 ### 第一步：配置医生
@@ -146,33 +217,47 @@ npm run build
 
 ```
 ai-medical-consultation-panel/
-├── src/
-│   ├── api/              # API 调用模块
-│   │   ├── callAI.js     # AI 模型调用封装
-│   │   └── models.js     # 模型列表获取
-│   ├── assets/           # 静态资源
-│   ├── components/       # Vue 组件
-│   │   ├── CaseInputForm.vue        # 病例输入表单
-│   │   ├── ChatDisplay.vue          # 聊天记录显示
-│   │   ├── DiscussionPanel.vue      # 讨论面板
-│   │   ├── DoctorList.vue           # 医生列表
-│   │   ├── SessionListDrawer.vue    # 会话列表抽屉
-│   │   ├── SettingsModal.vue        # 设置弹窗
-│   │   ├── StatusPanel.vue          # 状态面板
-│   │   ├── VoteTally.vue            # 投票统计
-│   │   └── VotingControls.vue       # 投票控制
-│   ├── store/            # 状态管理
-│   │   ├── index.js      # 会诊流程状态
-│   │   ├── global.js     # 全局配置状态
-│   │   └── sessions.js   # 会话管理状态
-│   ├── utils/            # 工具函数
-│   │   └── prompt.js     # 提示词构建
-│   ├── App.vue           # 根组件
-│   └── main.js           # 应用入口
-├── index.html            # HTML 模板
-├── vite.config.js        # Vite 配置
-├── package.json          # 项目配置
-└── README.md             # 项目文档
+├── src/                          # Web 应用源代码（Vue 3）
+│   ├── api/                      # API 调用模块
+│   │   ├── callAI.js             # AI 模型调用封装
+│   │   └── models.js             # 模型列表获取
+│   ├── assets/                   # 静态资源
+│   ├── components/               # Vue 组件
+│   │   ├── CaseInputForm.vue     # 病例输入表单
+│   │   ├── ChatDisplay.vue       # 聊天记录显示
+│   │   ├── DiscussionPanel.vue   # 讨论面板
+│   │   ├── DoctorList.vue        # 医生列表
+│   │   ├── SessionListDrawer.vue # 会话列表抽屉
+│   │   ├── SettingsModal.vue     # 设置弹窗
+│   │   ├── StatusPanel.vue       # 状态面板
+│   │   ├── VoteTally.vue         # 投票统计
+│   │   └── VotingControls.vue    # 投票控制
+│   ├── store/                    # 状态管理
+│   │   ├── index.js              # 会诊流程状态
+│   │   ├── global.js             # 全局配置状态
+│   │   └── sessions.js           # 会话管理状态
+│   ├── utils/                    # 工具函数
+│   │   └── prompt.js             # 提示词构建
+│   ├── App.vue                   # 根组件
+│   └── main.js                   # 应用入口
+├── harmony/                      # HarmonyOS 应用（ArkTS + ArkUI）
+│   ├── entry/                    # 主模块
+│   │   ├── src/main/
+│   │   │   ├── ets/              # ArkTS 源代码
+│   │   │   │   ├── ability/      # 能力（Activity）
+│   │   │   │   ├── pages/        # 页面
+│   │   │   │   ├── components/   # UI 组件
+│   │   │   │   └── utils/        # 工具函数
+│   │   │   └── resources/        # 资源文件
+│   │   ├── hvigorfile.ts         # 构建配置
+│   │   └── build-profile.json5   # 编译配置
+│   ├── hvigorfile.ts             # 根构建配置
+│   ├── build-profile.json5       # 根编译配置
+│   └── README.md                 # HarmonyOS 详细文档
+├── index.html                    # HTML 模板
+├── vite.config.js                # Vite 配置
+├── package.json                  # 项目配置
+└── README.md                     # 项目文档
 ```
 
 ## 🔧 配置说明

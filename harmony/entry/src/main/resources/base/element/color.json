@@ -1,0 +1,28 @@
+{
+  "color": [
+    {
+      "name": "primary_color",
+      "value": "#1890ff"
+    },
+    {
+      "name": "text_primary",
+      "value": "#000000"
+    },
+    {
+      "name": "text_secondary",
+      "value": "#8c8c8c"
+    },
+    {
+      "name": "border_color",
+      "value": "#f0f0f0"
+    },
+    {
+      "name": "background_primary",
+      "value": "#ffffff"
+    },
+    {
+      "name": "background_secondary",
+      "value": "#fafafa"
+    }
+  ]
+}

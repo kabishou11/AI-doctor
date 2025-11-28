@@ -1,0 +1,36 @@
+# Node dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Build outputs
+build/
+dist/
+*.hap
+*.hsp
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# DevEco Studio
+.deveco/
+.hvigor/
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# Local development
+.env.local
+.env.*.local

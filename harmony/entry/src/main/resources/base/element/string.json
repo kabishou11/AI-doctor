@@ -1,0 +1,16 @@
+{
+  "string": [
+    {
+      "name": "module_desc",
+      "value": "module description"
+    },
+    {
+      "name": "ability_desc",
+      "value": "ability description"
+    },
+    {
+      "name": "app_name",
+      "value": "AI Medical Consultation"
+    }
+  ]
+}

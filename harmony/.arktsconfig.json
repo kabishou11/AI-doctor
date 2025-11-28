@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "declaration": false,
+    "sourceMap": true,
+    "skipLibCheck": true,
+    "strict": false,
+    "forceExternalAts": false,
+    "lib": ["lib.d.ts"],
+    "libDir": "./",
+    "paths": {
+      "@/*": ["./*"]
+    },
+    "target": "esnext"
+  },
+  "etsOptions": {
+    "resolveFileExtensions": [".ets", ".ts", ".js"],
+    "resolveDir": ["./entry"]
+  },
+  "include": [
+    "./entry"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
+}
