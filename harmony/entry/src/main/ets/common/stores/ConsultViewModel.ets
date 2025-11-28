@@ -656,6 +656,22 @@ export class ConsultViewModel {
     this.onAutoSaveCallback = callback
   }
 
+  getConsultationName(): string {
+    return this.consultationName
+  }
+
+  getSettings(): ConsultationSettings {
+    return this.settings
+  }
+
+  getDoctors(): Doctor[] {
+    return this.doctors
+  }
+
+  getLinkedConsultations(): LinkedConsultation[] {
+    return this.linkedConsultations
+  }
+
   private debounceAutoSave(): void {
     if (this.autoSaveTimer !== null) {
       clearTimeout(this.autoSaveTimer)
