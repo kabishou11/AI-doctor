@@ -107,6 +107,7 @@ export const useSessionsStore = defineStore('sessions', {
         settings: undefined,
         doctors: [],
         patientCase: { name: '', gender: '', age: null, pastHistory: '', currentProblem: '', imageRecognitionResult: '', imageRecognitions: [] },
+        selectedKnowledgeIds: [],
         linkedConsultations: [],
         workflow: { phase: 'setup', currentRound: 0, roundsWithoutElimination: 0, activeTurn: null, turnQueue: [], paused: false },
         discussionHistory: [],
@@ -150,6 +151,7 @@ export const useSessionsStore = defineStore('sessions', {
           consult.doctors = []
         }
         if (payload.patientCase) consult.setPatientCase(payload.patientCase)
+        consult.setSelectedKnowledge(Array.isArray(payload.selectedKnowledgeIds) ? payload.selectedKnowledgeIds : [])
         consult.setLinkedConsultations(payload.linkedConsultations || [], { syncPatientInfo: false })
         if (payload.workflow) consult.workflow = payload.workflow
         if (payload.discussionHistory) consult.discussionHistory = payload.discussionHistory
@@ -160,6 +162,7 @@ export const useSessionsStore = defineStore('sessions', {
         consult.settings = consult.settings
         consult.doctors = []
         consult.setPatientCase({ name: '', gender: '', age: null, pastHistory: '', currentProblem: '', imageRecognitionResult: '', imageRecognitions: [] })
+        consult.setSelectedKnowledge([])
         consult.setLinkedConsultations([], { syncPatientInfo: false })
         consult.workflow = { phase: 'setup', currentRound: 0, roundsWithoutElimination: 0, activeTurn: null, turnQueue: [], paused: false }
         consult.discussionHistory = []

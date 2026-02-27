@@ -41,9 +41,39 @@
 
     <DoctorList :doctors="store.doctors" />
 
+    <div style="margin-top: 16px;">
+      <a-alert
+        type="info"
+        show-icon
+        message="已选知识库片段"
+        :description="selectedKnowledge.length ? '将在检索后自动注入相似度最高的片段' : '尚未选择知识片段，可在问诊设置中添加。'"
+      />
+      <div v-if="selectedKnowledge.length" style="margin-top: 8px; display:flex; flex-wrap: wrap; gap: 8px;">
+        <a-popover v-for="item in selectedKnowledge" :key="item.id" :title="item.title" trigger="hover">
+          <template #content>
+            <div style="max-width:260px; white-space: normal;">{{ item.desc || '无摘要' }}</div>
+          </template>
+          <a-tag color="blue">{{ item.title }}</a-tag>
+        </a-popover>
+      </div>
+    </div>
+
     <template v-if="store.workflow.phase === 'voting'">
       <div style="margin-top: 16px">
         <VoteTally :doctors="store.doctors" :votes="store.lastRoundVotes" />
+      </div>
+    </template>
+
+    <template v-if="store.workflow.phase === 'discussion'">
+      <div style="margin-top: 16px">
+        <div style="display:flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+          <span style="font-weight:600;">本轮进度</span>
+          <span style="font-size:12px; color:#8c8c8c;">
+            {{ roundProgress.done }}/{{ roundProgress.total }}
+            <span v-if="roundProgress.current"> · {{ roundProgress.current }}</span>
+          </span>
+        </div>
+        <a-progress :percent="roundProgress.percent" :status="store.workflow.activeTurn ? 'active' : 'normal'" />
       </div>
     </template>
 
@@ -138,12 +168,14 @@
 </template>
 
 <script setup>
-import { computed, ref } from "vue";
+import { computed, ref, h } from "vue";
 import { marked } from "marked";
 import { message } from "ant-design-vue";
 
 import { useConsultStore } from "../store";
 import { useSessionsStore } from "../store/sessions";
+import { useKnowledgeStore } from "../store/knowledge";
+import { Tag, Popover } from "ant-design-vue";
 import DoctorList from "./DoctorList.vue";
 import VoteTally from "./VoteTally.vue";
 import ExpandableText from "./ExpandableText.vue";
@@ -151,6 +183,7 @@ import { exportSessionAsPDF, exportSessionAsImage } from "../utils/exportSession
 
 const store = useConsultStore();
 const sessions = useSessionsStore();
+const knowledge = useKnowledgeStore();
 const summaryOpen = ref(false);
 const exportRef = ref(null);
 const isExportingSession = ref(false);
@@ -177,6 +210,26 @@ const winnerText = computed(() => {
   const actives = store.doctors.filter((d) => d.status === "active");
   if (actives.length === 1) return `最终答案来自：${actives[0].name}`;
   return "已达到未标注不太准确轮数上限";
+});
+
+const roundProgress = computed(() => {
+  const p = store.workflow?.progress || {}
+  const total = p.total || 0
+  const done = p.done || 0
+  const current = p.current || ''
+  const percent = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0
+  return { total, done, current, percent }
+})
+const selectedKnowledge = computed(() => {
+  const ids = Array.isArray(store.selectedKnowledgeIds) ? store.selectedKnowledgeIds : [];
+  return ids
+    .map((id) => knowledge.docMap.get(id))
+    .filter(Boolean)
+    .map((doc) => ({
+      id: doc.id,
+      title: doc.title || "未命名文档",
+      desc: doc.excerpt || (doc.content || "").slice(0, 80)
+    }));
 });
 
 function renderMarkdown(text) {
@@ -283,6 +336,23 @@ function resetAll() {
     content: "",
     usedPrompt: "",
   };
+  store.setSelectedKnowledge([]);
+}
+
+function renderKnowledgeItem({ item }) {
+  const AListItem = "a-list-item"
+  const AListItemMeta = "a-list-item-meta"
+  return h(
+    AListItem,
+    null,
+    {
+      default: () =>
+        h(AListItemMeta, {
+          title: item.title,
+          description: item.desc || "无摘要"
+        })
+    }
+  )
 }
 </script>
 

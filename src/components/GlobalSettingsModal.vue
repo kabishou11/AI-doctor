@@ -43,16 +43,19 @@
                           style="flex:1; min-width: 0;"
                           v-model:value="element.model"
                           :options="modelOptions[element.id] || []"
-                          show-search
-                          :loading="loadingModel[element.id]"
-                          placeholder="点击右侧按钮加载模型列表"
-                          :dropdown-match-select-width="false"
-                        />
-                        <a-button :loading="loadingModel[element.id]" style="flex-shrink: 0;" @click="() => loadModels(element)">加载模型</a-button>
-                      </div>
-                    </a-form-item>
-                  </a-col>
-                </a-row>
+                      show-search
+                      :loading="loadingModel[element.id]"
+                      placeholder="点击右侧按钮加载模型列表"
+                      :dropdown-match-select-width="false"
+                    />
+                    <a-space>
+                      <a-button :loading="loadingModel[element.id]" style="flex-shrink: 0;" @click="() => loadModels(element)">加载模型</a-button>
+                      <a-button :loading="!!testingDoctor[element.id]" style="flex-shrink: 0;" @click="() => testDoctorModel(element)">测试调用</a-button>
+                    </a-space>
+                  </div>
+                </a-form-item>
+              </a-col>
+            </a-row>
                 <a-form-item label="自定义提示词（可选）">
                   <div style="display:flex; gap:8px; margin-bottom: 8px;">
                     <a-select
@@ -118,15 +121,16 @@
             <span style="margin-left: 8px;">启用图像识别功能</span>
           </a-form-item>
           <template v-if="localImageRecognition.enabled">
-            <a-alert type="info" show-icon message="使用硅基流动的图片识别API" description="请选择支持图片识别的模型，并填写相应的API Key。" style="margin-bottom: 16px;" />
-            <a-row :gutter="8">
-              <a-col :span="8">
-                <a-form-item label="供应商">
-                  <a-select v-model:value="localImageRecognition.provider" disabled>
-                    <a-select-option value="siliconflow">硅基流动</a-select-option>
-                  </a-select>
-                </a-form-item>
-              </a-col>
+          <a-alert type="info" show-icon message="使用硅基流动的图片识别API" description="请选择支持图片识别的模型，并填写相应的API Key。" style="margin-bottom: 16px;" />
+          <a-row :gutter="8">
+            <a-col :span="8">
+              <a-form-item label="供应商">
+                <a-select v-model:value="localImageRecognition.provider">
+                  <a-select-option value="siliconflow">硅基流动</a-select-option>
+                  <a-select-option value="modelscope">魔搭社区</a-select-option>
+                </a-select>
+              </a-form-item>
+            </a-col>
               <a-col :span="8">
                 <a-form-item label="API Key">
                   <a-input-password v-model:value="localImageRecognition.apiKey" placeholder="sk-..." />
@@ -236,6 +240,28 @@
           </a-card>
         </a-space>
       </a-tab-pane>
+      <a-tab-pane key="embedding" tab="知识库向量">
+        <a-form layout="vertical">
+          <a-alert type="info" show-icon message="使用魔搭社区 Embedding 生成向量" description="用于知识库检索。向量化后，在问诊提示词中会加入相似度最高的片段。" />
+          <a-row :gutter="8">
+            <a-col :span="8">
+              <a-form-item label="Embedding 模型">
+                <a-input v-model:value="localEmbedding.model" placeholder="text-embedding-v3" />
+              </a-form-item>
+            </a-col>
+            <a-col :span="8">
+              <a-form-item label="API Key">
+                <a-input-password v-model:value="localEmbedding.apiKey" placeholder="sk-..." />
+              </a-form-item>
+            </a-col>
+            <a-col :span="8">
+              <a-form-item label="Base URL（可选）">
+                <a-input v-model:value="localEmbedding.baseUrl" placeholder="留空使用默认 dashscope" />
+              </a-form-item>
+            </a-col>
+          </a-row>
+        </a-form>
+      </a-tab-pane>
     </a-tabs>
   </a-modal>
 </template>
@@ -245,12 +271,15 @@ import { ref, watch, h, resolveComponent, computed } from 'vue'
 import draggable from 'vuedraggable'
 import { useConsultStore } from '../store'
 import { useGlobalStore } from '../store/global'
+import { useKnowledgeStore } from '../store/knowledge'
 import { message } from 'ant-design-vue'
+import { callAI } from '../api/callAI'
 import { listModels } from '../api/models'
 import { recognizeImageWithSiliconFlow } from '../api/imageRecognition'
 
 const store = useConsultStore()
 const global = useGlobalStore()
+const knowledgeStore = useKnowledgeStore()
 
 const props = defineProps({ open: { type: Boolean, default: false } })
 const emit = defineEmits(['update:open'])
@@ -274,6 +303,7 @@ const localDoctors = ref(JSON.parse(JSON.stringify(global.doctors)))
 const localSettings = ref(JSON.parse(JSON.stringify(store.settings)))
 const localImageRecognition = ref(JSON.parse(JSON.stringify(global.imageRecognition || {})))
 const localPresetPrompts = ref(JSON.parse(JSON.stringify(global.presetPrompts || [])))
+const localEmbedding = ref(JSON.parse(JSON.stringify(knowledgeStore.embeddingConfig || { model: 'text-embedding-v3', apiKey: '', baseUrl: '' })))
 const selectedPreset = ref({})
 const modelOptions = ref({})
 const loadingModel = ref({})
@@ -282,6 +312,7 @@ const loadingImageModel = ref(false)
 const testingImageAPI = ref(false)
 const testImage = ref(null)
 const exportSelection = ref([])
+const testingDoctor = ref({})
 
 watch(
   () => props.open,
@@ -300,6 +331,7 @@ watch(
       testingImageAPI.value = false
       testImage.value = null
       exportSelection.value = []
+      localEmbedding.value = JSON.parse(JSON.stringify(knowledgeStore.embeddingConfig || { model: 'text-embedding-v3', apiKey: '', baseUrl: '' }))
     }
   }
 )
@@ -378,6 +410,29 @@ async function loadModels(element) {
     message.error(`加载模型失败：${e?.message || e}`)
   } finally {
     loadingModel.value = { ...loadingModel.value, [id]: false }
+  }
+}
+
+async function testDoctorModel(element) {
+  const id = element.id
+  testingDoctor.value = { ...testingDoctor.value, [id]: true }
+  try {
+    const doctor = {
+      id,
+      name: element.name || id,
+      provider: element.provider,
+      model: element.model,
+      apiKey: element.apiKey,
+      baseUrl: element.baseUrl
+    }
+    const fullPrompt = { system: 'You are a connection test bot.', user: '请回复：OK' }
+    const reply = await callAI(doctor, fullPrompt, [])
+    const preview = String(reply || '').slice(0, 60)
+    message.success(`模型可用，返回: ${preview || 'OK'}`)
+  } catch (e) {
+    message.error(`调用失败：${e?.message || e}`)
+  } finally {
+    testingDoctor.value = { ...testingDoctor.value, [id]: false }
   }
 }
 
@@ -587,6 +642,7 @@ function onSave() {
   global.setDoctors(localDoctors.value)
   global.setPresetPrompts(localPresetPrompts.value)
   global.setImageRecognition(localImageRecognition.value)
+  knowledgeStore.setEmbeddingConfig(localEmbedding.value)
   store.setSettings(localSettings.value)
   message.success('已保存全局设置')
   open.value = false

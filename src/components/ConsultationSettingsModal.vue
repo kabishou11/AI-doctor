@@ -1,5 +1,5 @@
 <template>
-  <a-modal v-model:open="open" title="问诊设置" width="900px" @ok="onSave" ok-text="保存">
+<a-modal v-model:open="open" title="问诊设置" width="900px" @ok="onSave" ok-text="保存">
     <a-tabs>
       <a-tab-pane key="consultSettings" tab="问诊参数">
         <a-form layout="vertical">
@@ -63,6 +63,22 @@
           </div>
         </a-space>
       </a-tab-pane>
+      <a-tab-pane key="knowledge" tab="知识库选择">
+        <a-space direction="vertical" style="width: 100%" :size="12">
+          <a-alert type="info" show-icon message="选择要用于当前问诊的知识片段" description="勾选后将作为上下文附加到提示词中，请确保内容与患者相关。" />
+          <div style="display:flex; gap: 8px;">
+            <a-input-search v-model:value="knowledgeSearch" placeholder="搜索标题/内容/标签" allow-clear />
+            <a-button type="link" @click="() => emit('open-knowledge')">管理知识库</a-button>
+          </div>
+          <a-list
+            v-if="knowledgeOptions.length"
+            :data-source="knowledgeOptions"
+            item-layout="vertical"
+            :renderItem="renderKnowledgeItem"
+          />
+          <a-empty v-else description="暂无知识文档，请先在知识库中创建" />
+        </a-space>
+      </a-tab-pane>
     </a-tabs>
   </a-modal>
 </template>
@@ -72,14 +88,16 @@ import { ref, watch, h, resolveComponent, computed } from 'vue'
 import { useConsultStore } from '../store'
 import { useGlobalStore } from '../store/global'
 import { useSessionsStore } from '../store/sessions'
+import { useKnowledgeStore } from '../store/knowledge'
 import { message } from 'ant-design-vue'
 
 const store = useConsultStore()
 const global = useGlobalStore()
 const sessions = useSessionsStore()
+const knowledge = useKnowledgeStore()
 
 const props = defineProps({ open: { type: Boolean, default: false } })
-const emit = defineEmits(['update:open'])
+const emit = defineEmits(['update:open', 'open-knowledge'])
 
 const open = ref(props.open)
 watch(
@@ -95,6 +113,8 @@ const linkedConsultations = ref(JSON.parse(JSON.stringify(store.linkedConsultati
 const selectedToAdd = ref(null)
 const selectedLinkedIds = ref((store.linkedConsultations || []).map((item) => item.sourceId || item.id?.replace(/^linked-/, '') || item.id))
 const previousValidLinkedIds = ref([...selectedLinkedIds.value])
+const selectedKnowledgeIds = ref(Array.isArray(store.selectedKnowledgeIds) ? [...store.selectedKnowledgeIds] : [])
+const knowledgeSearch = ref('')
 
 watch(
   () => props.open,
@@ -107,6 +127,7 @@ watch(
       selectedToAdd.value = null
       selectedLinkedIds.value = (store.linkedConsultations || []).map((item) => item.sourceId || item.id?.replace(/^linked-/, '') || item.id)
       previousValidLinkedIds.value = [...selectedLinkedIds.value]
+      selectedKnowledgeIds.value = Array.isArray(store.selectedKnowledgeIds) ? [...store.selectedKnowledgeIds] : []
     }
   }
 )
@@ -127,13 +148,12 @@ const providerOptionsMap = computed(() => {
 })
 
 const globalDoctorOptions = computed(() => {
-   const included = new Set((consultDoctors.value || []).map((d) => d.id))
-   return (global.doctors || [])
-     .filter((d) => !included.has(d.id))
-     .map((d) => ({ label: `${d.name}（${providerOptionsMap.value[d.provider] || d.provider}•${d.model}）`, value: d.id }))
- })
-
- function isValidDoctor(doctor) {
+  const included = new Set((consultDoctors.value || []).map((d) => d.id))
+  return (global.doctors || [])
+    .filter((d) => !included.has(d.id))
+    .map((d) => ({ label: `${d.name}（${providerOptionsMap.value[d.provider] || d.provider} / ${d.model}）`, value: d.id }))
+})
+function isValidDoctor(doctor) {
    return doctor && doctor.apiKey && doctor.apiKey.trim() && doctor.model && doctor.model.trim()
  }
 
@@ -357,11 +377,49 @@ function renderLinkedConsultation({ item }) {
   )
 }
 
+const knowledgeOptions = computed(() => {
+  const list = knowledge.search(knowledgeSearch.value)
+  return (list || []).map((item) => ({
+    id: item.id,
+    title: item.title || '未命名文档',
+    desc: item.excerpt || (item.content || '').slice(0, 120)
+  }))
+})
+
+function toggleKnowledge(id) {
+  const set = new Set(selectedKnowledgeIds.value || [])
+  if (set.has(id)) set.delete(id)
+  else set.add(id)
+  selectedKnowledgeIds.value = Array.from(set)
+}
+
+function renderKnowledgeItem({ item }) {
+  const ACheckbox = resolveComponent('a-checkbox')
+  return h(
+    'a-list-item',
+    null,
+    {
+      default: () =>
+        h('div', { style: { display: 'flex', gap: '8px', alignItems: 'flex-start' } }, [
+          h(ACheckbox, {
+            checked: selectedKnowledgeIds.value.includes(item.id),
+            onChange: () => toggleKnowledge(item.id)
+          }),
+          h('div', { style: { flex: 1, minWidth: 0 } }, [
+            h('div', { style: { fontWeight: '600' } }, item.title),
+            h('div', { style: { color: '#8c8c8c', fontSize: '12px', marginTop: '4px' } }, item.desc || '无摘要')
+          ])
+        ])
+    }
+  )
+}
+
 function onSave() {
   store.setConsultationName(localConsultationName.value)
   store.setSettings(localSettings.value)
   store.setDoctors(consultDoctors.value)
   store.setLinkedConsultations(linkedConsultations.value)
+  store.setSelectedKnowledge(selectedKnowledgeIds.value)
   if (localConsultationName.value.trim() && sessions.currentId) {
     sessions.rename(sessions.currentId, localConsultationName.value.trim())
   }
@@ -369,3 +427,4 @@ function onSave() {
   open.value = false
 }
 </script>
+

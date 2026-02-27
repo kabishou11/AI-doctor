@@ -78,7 +78,7 @@ import { useConsultStore } from '../store'
 import { useGlobalStore } from '../store/global'
 import CaseInputForm from './CaseInputForm.vue'
 import ChatDisplay from './ChatDisplay.vue'
-import { recognizeImageWithSiliconFlow } from '../api/imageRecognition'
+import { recognizeImageWithSiliconFlow, recognizeImageWithModelScope } from '../api/imageRecognition'
 
 const store = useConsultStore()
 const global = useGlobalStore()
@@ -88,6 +88,7 @@ const isRecognizingImage = ref(false)
 const canInput = computed(() => store.workflow.phase !== 'setup')
 const imageRecognitionConfig = computed(() => global.imageRecognition || {})
 const imageRecognitionEnabled = computed(() => !!imageRecognitionConfig.value?.enabled)
+const imageProvider = computed(() => imageRecognitionConfig.value?.provider || 'siliconflow')
 
 function togglePause() {
   store.togglePause()
@@ -128,13 +129,17 @@ async function handleImageUpload(file) {
   try {
     const base64 = await toBase64(file)
     
-    const result = await recognizeImageWithSiliconFlow({
+    const payload = {
       apiKey: imageRecognitionConfig.value.apiKey,
       baseUrl: imageRecognitionConfig.value.baseUrl,
       model: imageRecognitionConfig.value.model,
       prompt: imageRecognitionConfig.value.prompt,
       imageBase64: base64.raw
-    })
+    }
+    const result =
+      imageProvider.value === 'modelscope'
+        ? await recognizeImageWithModelScope(payload)
+        : await recognizeImageWithSiliconFlow(payload)
 
     const trimmed = (result || '').trim()
 

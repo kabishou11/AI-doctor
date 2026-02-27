@@ -93,17 +93,36 @@ export async function listSiliconFlowModels(apiKey, baseUrl) {
 }
 
 export async function listModelScopeModels(apiKey, baseUrl) {
-  const root = normalizeBaseUrl(baseUrl, 'https://dashscope.aliyuncs.com')
-  const url = wrapUrlForDev(`${root}/compatible-mode/v1/models`)
-  const res = await axios.get(url, {
-    headers: { Authorization: `Bearer ${apiKey}` }
-  })
-  const data = res.data?.data || res.data?.models || []
-  return data
-    .map((m) => ({
-      id: m.id || m.name,
-      displayName: m.display_name || m.owned_by || m.provider || undefined
-    }))
-    .filter((m) => !!m.id)
-    .sort((a, b) => a.id.localeCompare(b.id))
+  const endpoints = []
+  if (baseUrl && baseUrl.trim()) {
+    endpoints.push(normalizeBaseUrl(baseUrl, baseUrl))
+  }
+  if (apiKey?.startsWith('ms-')) endpoints.push('https://api-inference.modelscope.cn/v1')
+  if (apiKey?.startsWith('sk-')) endpoints.push('https://dashscope.aliyuncs.com/compatible-mode/v1')
+  endpoints.push('https://api-inference.modelscope.cn/v1', 'https://dashscope.aliyuncs.com/compatible-mode/v1')
+  const uniq = Array.from(new Set(endpoints.filter(Boolean)))
+
+  const headers = { Authorization: `Bearer ${apiKey}` }
+  const errors = []
+  for (const root of uniq) {
+    const url = root.includes('compatible-mode') ? `${normalizeBaseUrl(root, root)}/models` : `${normalizeBaseUrl(root, root)}/models`
+    try {
+      const finalUrl = wrapUrlForDev(url)
+      const res = await axios.get(finalUrl, { headers })
+      const data = res.data?.data || res.data?.models || []
+      return data
+        .map((m) => ({
+          id: m.id || m.name,
+          displayName: m.display_name || m.owned_by || m.provider || undefined
+        }))
+        .filter((m) => !!m.id)
+        .sort((a, b) => a.id.localeCompare(b.id))
+    } catch (err) {
+      const status = err?.response?.status
+      const body = err?.response?.data
+      errors.push(`endpoint ${root}: ${status || ''} ${body ? JSON.stringify(body) : err?.message || err}`)
+    }
+  }
+  const msg = errors.length ? errors.join(' | ') : '加载模型失败'
+  throw new Error(msg)
 }

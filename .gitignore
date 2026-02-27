@@ -3,7 +3,13 @@ dist/
 .env
 .env.local
 .env.production
+.env.*.local
 .DS_Store
 *.log
 .idea/
 .vscode/
+.sisyphus/
+.claude/
+.harmony/
+build/
+*.local

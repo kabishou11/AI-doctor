@@ -1,6 +1,24 @@
 import { defineStore } from 'pinia'
 import { callAI } from '../api/callAI'
 import { buildFullPrompt, buildVotePrompt, buildFinalSummaryPrompt, formatHistoryForProvider } from '../utils/prompt'
+import { useKnowledgeStore } from './knowledge'
+
+const DEFAULT_CALL_TIMEOUT = Number(import.meta.env?.VITE_AI_TIMEOUT_MS || 60000) || 60000
+
+async function callWithTimeout(fn, timeoutMs = DEFAULT_CALL_TIMEOUT) {
+  let timer
+  try {
+    const res = await Promise.race([
+      fn(),
+      new Promise((_, rej) => {
+        timer = setTimeout(() => rej(new Error('调用超时，请检查模型配置或网络')), timeoutMs)
+      })
+    ])
+    return res
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+}
 
 function delay(ms) {
   return new Promise((res) => setTimeout(res, ms))
@@ -91,6 +109,7 @@ export const useConsultStore = defineStore('consult', {
       imageRecognitionResult: '',
       imageRecognitions: []
     },
+    selectedKnowledgeIds: [],
     linkedConsultations: [],
     workflow: {
       phase: 'setup',
@@ -98,8 +117,10 @@ export const useConsultStore = defineStore('consult', {
       roundsWithoutElimination: 0,
       activeTurn: null,
       turnQueue: [],
-      paused: false
+      paused: false,
+      progress: { total: 0, done: 0, current: '' }
     },
+    lastSuccessDoctorId: null,
     discussionHistory: [],
     lastRoundVotes: [],
     finalSummary: { status: 'idle', doctorId: null, doctorName: '', content: '', usedPrompt: '' }
@@ -171,6 +192,10 @@ export const useConsultStore = defineStore('consult', {
       const name = this.patientCase?.name ? `患者（${this.patientCase.name}）` : '患者'
       this.discussionHistory.push({ type: 'patient', author: name, content })
     },
+    setSelectedKnowledge(ids) {
+      const valid = Array.isArray(ids) ? ids.filter((x) => typeof x === 'string' && x) : []
+      this.selectedKnowledgeIds = Array.from(new Set(valid))
+    },
     resetVotes() {
       this.doctors = this.doctors.map((d) => ({ ...d, votes: 0 }))
     },
@@ -202,9 +227,38 @@ export const useConsultStore = defineStore('consult', {
       } else {
         this.workflow.turnQueue = this.doctors.filter((d) => d.status === 'active').map((d) => d.id)
       }
+      this.workflow.progress = { total: this.workflow.turnQueue.length, done: 0, current: '' }
     },
-    async runDiscussionRound() {
-      for (const doctorId of this.workflow.turnQueue) {
+    buildCaseQueryText() {
+      const parts = []
+      if (this.patientCase?.name) parts.push(`患者: ${this.patientCase.name}`)
+      if (this.patientCase?.gender) parts.push(`性别: ${this.patientCase.gender}`)
+      if (this.patientCase?.age !== null && this.patientCase?.age !== undefined) parts.push(`年龄: ${this.patientCase.age}`)
+      if (this.patientCase?.pastHistory) parts.push(`既往史: ${this.patientCase.pastHistory}`)
+      if (this.patientCase?.currentProblem) parts.push(`主诉: ${this.patientCase.currentProblem}`)
+      if (this.patientCase?.imageRecognitionResult) parts.push(`图片识别: ${this.patientCase.imageRecognitionResult}`)
+      const latest = this.discussionHistory.slice(-4).map((m) => `${m.type === 'doctor' ? m.doctorName || '医生' : '患者'}: ${m.content}`).join('；')
+      if (latest) parts.push(`讨论摘录: ${latest}`)
+      return parts.join('\n')
+    },
+    async fetchKnowledgeContext() {
+      try {
+        const knowledge = useKnowledgeStore()
+        const queryText = this.buildCaseQueryText()
+        const entries = await knowledge.retrieveContext({
+          queryText,
+          selectedIds: this.selectedKnowledgeIds,
+          topK: 5
+        })
+        return entries || []
+      } catch (e) {
+        return []
+      }
+    },
+async runDiscussionRound() {
+      const knowledgeEntries = await this.fetchKnowledgeContext()
+      for (let idx = 0; idx < this.workflow.turnQueue.length; idx++) {
+        const doctorId = this.workflow.turnQueue[idx]
         const doctor = this.doctors.find((d) => d.id === doctorId)
         if (!doctor || doctor.status !== 'active') continue
 
@@ -212,13 +266,15 @@ export const useConsultStore = defineStore('consult', {
         await this.waitWhilePaused()
 
         this.workflow.activeTurn = doctorId
+        this.workflow.progress.current = doctor.name
+        this.workflow.progress.done = idx
         // 提示“正在输入...”，随后在得到回复后移除
         const typingIndex = this.discussionHistory.push({ type: 'system', content: `${doctor.name} 正在输入...` }) - 1
         const systemPrompt = doctor.customPrompt || this.settings.globalSystemPrompt
-        const fullPrompt = buildFullPrompt(systemPrompt, this.patientCase, this.discussionHistory, doctor.id, this.linkedConsultations)
+        const fullPrompt = buildFullPrompt(systemPrompt, this.patientCase, this.discussionHistory, doctor.id, this.linkedConsultations, knowledgeEntries)
         try {
           const providerHistory = formatHistoryForProvider(this.discussionHistory, this.patientCase, doctor.id)
-          const response = await callAI(doctor, fullPrompt, providerHistory)
+          const response = await callWithTimeout(() => callAI(doctor, fullPrompt, providerHistory))
 
           // 移除“正在输入...”提示
           this.discussionHistory.splice(typingIndex, 1)
@@ -235,6 +291,9 @@ export const useConsultStore = defineStore('consult', {
           }
 
           this.workflow.activeTurn = null
+          this.workflow.progress.done = idx + 1
+          this.workflow.progress.current = ''
+          this.lastSuccessDoctorId = doctor.id
         } catch (e) {
           this.workflow.activeTurn = null
           // 确保提示被移除
@@ -245,6 +304,8 @@ export const useConsultStore = defineStore('consult', {
             doctorName: doctor.name,
             content: `调用 ${doctor.name} 失败: ${e.message || e}`
           })
+          this.workflow.progress.done = idx + 1
+          this.workflow.progress.current = ''
         }
       }
       this.workflow.phase = 'voting'
@@ -267,35 +328,79 @@ export const useConsultStore = defineStore('consult', {
       this.resetVotes()
       this.lastRoundVotes = []
 
-      function parseVoteJSON(text) {
+      function parseVoteJSON(text, doctorList) {
         if (!text || typeof text !== 'string') return null
-        // 尝试截取第一个 { 到最后一个 }
-        const start = text.indexOf('{')
-        const end = text.lastIndexOf('}')
-        if (start !== -1 && end !== -1 && end > start) {
-          const candidate = text.slice(start, end + 1)
+        // 去掉代码块/标记
+        const cleaned = text.replace(/```json/gi, '```').replace(/```/g, '')
+        const lower = cleaned.toLowerCase()
+        const ids = Array.isArray(doctorList) ? doctorList.map((d) => d.id).filter(Boolean) : []
+        const names = Array.isArray(doctorList) ? doctorList.map((d) => d.name).filter(Boolean) : []
+
+        // 优先找包含 targetDoctorId 的对象
+        const braceMatches = cleaned.match(/\{[\s\S]*?\}/g) || []
+        for (const m of braceMatches) {
+          if (!/targetDoctorId/i.test(m)) continue
+          const candidate = m.replace(/,\s*}/g, '}').replace(/'/g, '"')
           try {
             return JSON.parse(candidate)
           } catch (e) {
-            // 尝试简单修复：将单引号替换为双引号
-            try {
-              const fixed = candidate.replace(/'/g, '"')
-              return JSON.parse(fixed)
-            } catch (e2) {
-              return null
-            }
+            continue
           }
         }
-        return null
+
+        // 回退：截取首尾花括号
+        const start = cleaned.indexOf('{')
+        const end = cleaned.lastIndexOf('}')
+        if (start !== -1 && end !== -1 && end > start) {
+          const candidate = cleaned.slice(start, end + 1).replace(/,\s*}/g, '}').replace(/'/g, '"')
+          try {
+            return JSON.parse(candidate)
+          } catch (e) {
+            // ignore
+          }
+        }
+
+        // 依据文本包含关系匹配（不区分大小写、去除空格符号）
+        const compressedText = lower.replace(/[\s:：]/g, '')
+        let bestHit = null
+        doctorList.forEach((doc, idx) => {
+          const variants = [
+            (doc.id || '').toLowerCase(),
+            (doc.name || '').toLowerCase(),
+            (doc.name || '').toLowerCase().replace(/\s+/g, '')
+          ].filter(Boolean)
+          const score = variants.reduce((acc, v) => {
+            if (!v) return acc
+            const re = new RegExp(v.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&'), 'g')
+            const matches = lower.match(re)
+            const compressedRe = new RegExp(v.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&'), 'g')
+            const compressedMatches = compressedText.match(compressedRe)
+            return acc + (matches ? matches.length : 0) + (compressedMatches ? compressedMatches.length : 0)
+          }, 0)
+          if (score > 0 && (!bestHit || score > bestHit.score)) {
+            bestHit = { id: doc.id, score }
+          } else if (score === bestHit?.score && bestHit && idx === 0) {
+            // keep earlier doctor on tie to avoid randomness
+          }
+        })
+
+        if (bestHit) {
+          return { targetDoctorId: bestHit.id, reason: '非JSON输出，依据文本关键词匹配' }
+        }
+
+        return { targetDoctorId: '', reason: '未按要求输出JSON' }
       }
 
       const activeDocs = this.doctors.filter((d) => d.status === 'active')
+      const knowledgeEntries = await this.fetchKnowledgeContext()
       const activeIds = activeDocs.map((d) => d.id)
 
       for (const voterDoc of activeDocs) {
         await this.waitWhilePaused()
         let targetId = null
         let reason = ''
+        let parsed = null
+        let response = ''
 
         try {
           // 如果无 API Key，则使用确定性的回退策略：自投
@@ -304,10 +409,18 @@ export const useConsultStore = defineStore('consult', {
             reason = '模拟模式：自评其答案需进一步论证，标注自己。'
           } else {
             const systemPrompt = voterDoc.customPrompt || this.settings.globalSystemPrompt
-            const fullPrompt = buildVotePrompt(systemPrompt, this.patientCase, this.discussionHistory, activeDocs, voterDoc, this.linkedConsultations)
+            const fullPrompt = buildVotePrompt(
+              systemPrompt,
+              this.patientCase,
+              this.discussionHistory,
+              activeDocs,
+              voterDoc,
+              this.linkedConsultations,
+              knowledgeEntries
+            )
             const providerHistory = formatHistoryForProvider(this.discussionHistory, this.patientCase, voterDoc.id)
-            const response = await callAI(voterDoc, fullPrompt, providerHistory)
-            const parsed = parseVoteJSON(response)
+            response = await callWithTimeout(() => callAI(voterDoc, fullPrompt, providerHistory))
+            parsed = parseVoteJSON(response, activeDocs)
             if (parsed && typeof parsed.targetDoctorId === 'string') {
               targetId = parsed.targetDoctorId
               reason = String(parsed.reason || '').trim() || '综合讨论后做出的判断。'
@@ -318,9 +431,29 @@ export const useConsultStore = defineStore('consult', {
         }
 
         if (!targetId || !activeIds.includes(targetId)) {
-          // 若解析失败或模型选择了不在列表中的ID，回退为自标
-          targetId = voterDoc.id
-          if (!reason) reason = '解析失败：默认标注自己。'
+          // 解析失败时优先回退为自标，避免误伤其他医生
+          if (voterDoc?.id && activeIds.includes(voterDoc.id)) {
+            targetId = voterDoc.id
+            if (!reason) reason = '解析失败：默认标注自己。'
+          } else {
+            const other = this.doctors.find((d) => d.id !== voterDoc.id) || activeDocs.find((d) => d.id !== voterDoc.id)
+            if (other) {
+              targetId = other.id
+              if (!reason) reason = '解析失败：默认标注其他医生。'
+            } else {
+              targetId = voterDoc?.id || activeIds[0]
+              if (!reason) reason = '解析失败：默认标注自己。'
+            }
+          }
+        }
+
+        // 若解析失败，记录原始输出以便调试
+        const trimmedResp = String(response || '').trim()
+        if ((!parsed || !parsed.targetDoctorId) && trimmedResp) {
+          this.discussionHistory.push({
+            type: 'system',
+            content: `评估输出未按JSON返回，原始内容：${trimmedResp.slice(0, 200)}`
+          })
         }
 
         const targetDoc = this.doctors.find((d) => d.id === targetId)
@@ -367,18 +500,34 @@ export const useConsultStore = defineStore('consult', {
       }
     },
     async generateFinalSummary(preferredDoctorId) {
-      try {
-        const activeDocs = this.doctors.filter((d) => d.status === 'active')
-        const summarizer = preferredDoctorId ? this.doctors.find((d) => d.id === preferredDoctorId) : (activeDocs[0] || this.doctors[0] || null)
-        if (!summarizer) return
-        const usedPrompt = this.settings.summaryPrompt || '请根据完整会诊内容，以临床医生口吻输出最终总结：包含核心诊断、依据、鉴别诊断、检查建议、治疗建议、随访计划和风险提示。'
-        this.finalSummary = { status: 'pending', doctorId: summarizer.id, doctorName: summarizer.name, content: '', usedPrompt }
-        const fullPrompt = buildFinalSummaryPrompt(usedPrompt, this.patientCase, this.discussionHistory, summarizer.id, this.linkedConsultations)
-        const providerHistory = formatHistoryForProvider(this.discussionHistory, this.patientCase, summarizer.id)
-        const response = await callAI(summarizer, fullPrompt, providerHistory)
-        this.finalSummary = { status: 'ready', doctorId: summarizer.id, doctorName: summarizer.name, content: response, usedPrompt }
-      } catch (e) {
-        this.finalSummary = { ...(this.finalSummary || {}), status: 'error', content: `生成总结失败：${e?.message || e}` }
+      const usedPrompt = this.settings.summaryPrompt || '请根据完整会诊内容，以临床医生口吻输出最终总结：包含核心诊断、依据、鉴别诊断、检查建议、治疗建议、随访计划和风险提示。'
+      const activeDocs = this.doctors.filter((d) => d.status === 'active')
+      const candidates = []
+      if (preferredDoctorId) {
+        const pd = this.doctors.find((d) => d.id === preferredDoctorId)
+        if (pd) candidates.push(pd)
+      }
+      if (this.lastSuccessDoctorId) {
+        const last = this.doctors.find((d) => d.id === this.lastSuccessDoctorId)
+        if (last && !candidates.includes(last)) candidates.push(last)
+      }
+      activeDocs.forEach((d) => {
+        if (!candidates.includes(d)) candidates.push(d)
+      })
+      if (!candidates.length && this.doctors.length) candidates.push(this.doctors[0])
+      for (const summarizer of candidates) {
+        try {
+          this.finalSummary = { status: 'pending', doctorId: summarizer.id, doctorName: summarizer.name, content: '', usedPrompt }
+          const knowledgeEntries = await this.fetchKnowledgeContext()
+          const fullPrompt = buildFinalSummaryPrompt(usedPrompt, this.patientCase, this.discussionHistory, summarizer.id, this.linkedConsultations, knowledgeEntries)
+          const providerHistory = formatHistoryForProvider(this.discussionHistory, this.patientCase, summarizer.id)
+          const response = await callWithTimeout(() => callAI(summarizer, fullPrompt, providerHistory))
+          this.finalSummary = { status: 'ready', doctorId: summarizer.id, doctorName: summarizer.name, content: response, usedPrompt }
+          return
+        } catch (e) {
+          this.finalSummary = { status: 'error', doctorId: summarizer.id, doctorName: summarizer.name, content: `生成总结失败：${e?.message || e}`, usedPrompt }
+          continue
+        }
       }
     },
     tallyVotes() {
