@@ -111,7 +111,7 @@ export const useSessionsStore = defineStore('sessions', {
         linkedConsultations: [],
         workflow: { phase: 'setup', currentRound: 0, roundsWithoutElimination: 0, activeTurn: null, turnQueue: [], paused: false },
         discussionHistory: [],
-        finalSummary: { status: 'idle', doctorId: null, doctorName: '', content: '', usedPrompt: '' }
+        finalSummary: { status: 'idle', doctorId: null, doctorName: '', content: '', usedPrompt: '', adoptedDoctorId: null, adoptedDoctorName: '' }
       })
       return id
     },
@@ -166,7 +166,7 @@ export const useSessionsStore = defineStore('sessions', {
         consult.setLinkedConsultations([], { syncPatientInfo: false })
         consult.workflow = { phase: 'setup', currentRound: 0, roundsWithoutElimination: 0, activeTurn: null, turnQueue: [], paused: false }
         consult.discussionHistory = []
-        consult.finalSummary = { status: 'idle', doctorId: null, doctorName: '', content: '', usedPrompt: '' }
+        consult.finalSummary = { status: 'idle', doctorId: null, doctorName: '', content: '', usedPrompt: '', adoptedDoctorId: null, adoptedDoctorName: '' }
         consult.lastRoundVotes = []
       }
     },

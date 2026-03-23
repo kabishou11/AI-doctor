@@ -123,7 +123,7 @@ export const useConsultStore = defineStore('consult', {
     lastSuccessDoctorId: null,
     discussionHistory: [],
     lastRoundVotes: [],
-    finalSummary: { status: 'idle', doctorId: null, doctorName: '', content: '', usedPrompt: '' }
+    finalSummary: { status: 'idle', doctorId: null, doctorName: '', content: '', usedPrompt: '', adoptedDoctorId: null, adoptedDoctorName: '' }
   }),
   getters: {
     activeDoctors(state) {
@@ -212,7 +212,7 @@ export const useConsultStore = defineStore('consult', {
       this.workflow.currentRound = 1
       this.workflow.roundsWithoutElimination = 0
       this.workflow.paused = false
-      this.finalSummary = { status: 'idle', doctorId: null, doctorName: '', content: '', usedPrompt: '' }
+      this.finalSummary = { status: 'idle', doctorId: null, doctorName: '', content: '', usedPrompt: '', adoptedDoctorId: null, adoptedDoctorName: '' }
       this.discussionHistory.push({ type: 'system', content: `第 ${this.workflow.currentRound} 轮会诊开始` })
       this.generateTurnQueue()
       this.runDiscussionRound()
@@ -499,7 +499,7 @@ async runDiscussionRound() {
         await this.runDiscussionRound()
       }
     },
-    async generateFinalSummary(preferredDoctorId) {
+    async generateFinalSummary(preferredDoctorId, adoptedDoctorId, adoptedDoctorName) {
       const usedPrompt = this.settings.summaryPrompt || '请根据完整会诊内容，以临床医生口吻输出最终总结：包含核心诊断、依据、鉴别诊断、检查建议、治疗建议、随访计划和风险提示。'
       const activeDocs = this.doctors.filter((d) => d.status === 'active')
       const candidates = []
@@ -515,17 +515,19 @@ async runDiscussionRound() {
         if (!candidates.includes(d)) candidates.push(d)
       })
       if (!candidates.length && this.doctors.length) candidates.push(this.doctors[0])
+      // 使用传入的采纳医生名称，或者取第一位候选项的名字
+      const finalAdoptedName = adoptedDoctorName || (preferredDoctorId ? (this.doctors.find(d => d.id === preferredDoctorId)?.name || '') : '')
       for (const summarizer of candidates) {
         try {
-          this.finalSummary = { status: 'pending', doctorId: summarizer.id, doctorName: summarizer.name, content: '', usedPrompt }
+          this.finalSummary = { status: 'pending', doctorId: summarizer.id, doctorName: summarizer.name, content: '', usedPrompt, adoptedDoctorId: adoptedDoctorId || preferredDoctorId, adoptedDoctorName: finalAdoptedName }
           const knowledgeEntries = await this.fetchKnowledgeContext()
           const fullPrompt = buildFinalSummaryPrompt(usedPrompt, this.patientCase, this.discussionHistory, summarizer.id, this.linkedConsultations, knowledgeEntries)
           const providerHistory = formatHistoryForProvider(this.discussionHistory, this.patientCase, summarizer.id)
           const response = await callWithTimeout(() => callAI(summarizer, fullPrompt, providerHistory))
-          this.finalSummary = { status: 'ready', doctorId: summarizer.id, doctorName: summarizer.name, content: response, usedPrompt }
+          this.finalSummary = { status: 'ready', doctorId: summarizer.id, doctorName: summarizer.name, content: response, usedPrompt, adoptedDoctorId: adoptedDoctorId || preferredDoctorId, adoptedDoctorName: finalAdoptedName }
           return
         } catch (e) {
-          this.finalSummary = { status: 'error', doctorId: summarizer.id, doctorName: summarizer.name, content: `生成总结失败：${e?.message || e}`, usedPrompt }
+          this.finalSummary = { status: 'error', doctorId: summarizer.id, doctorName: summarizer.name, content: `生成总结失败：${e?.message || e}`, usedPrompt, adoptedDoctorId: adoptedDoctorId || preferredDoctorId, adoptedDoctorName: finalAdoptedName }
           continue
         }
       }
@@ -557,7 +559,7 @@ async runDiscussionRound() {
         if (activeCount === 1) {
           const winner = this.doctors.find((d) => d.status === 'active')
           this.discussionHistory.push({ type: 'system', content: `会诊结束：采用 ${winner?.name || ''} 的答案。` })
-          this.generateFinalSummary(winner?.id)
+          this.generateFinalSummary(winner?.id, winner?.id, winner?.name)
         } else {
           this.discussionHistory.push({ type: 'system', content: '会诊结束：无在席医生。' })
           this.generateFinalSummary()

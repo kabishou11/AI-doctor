@@ -5,28 +5,55 @@
         <div class="app-brand">
           <img :src="logoUrl" alt="AstraCare Logo" class="logo" />
           <div class="brand-text">
-            <div class="brand-title">AstraCare 临床智研台</div>
-            <div class="brand-subtitle">多专家协同 · 知识驱动 · 高准度推理</div>
+            <div class="brand-title">AstraCare</div>
+            <div class="brand-subtitle">临床智研台</div>
           </div>
-          <div class="disclaimer">本内容用于学术研讨，不替代正式诊疗</div>
         </div>
-        <div class="app-actions">
-          <a-button @click="openSessions">问诊列表</a-button>
-          <a-button @click="openGlobalSettings">全局设置</a-button>
-          <a-button @click="openKnowledge">知识库</a-button>
-          <a-button type="primary" @click="openConsultationSettings">问诊设置</a-button>
+
+        <div class="header-divider"></div>
+
+        <div class="consultation-info" v-if="sessions.current?.name">
+          <a-tag color="blue" style="margin-right: 8px;">
+            <template #icon><MessageOutlined /></template>
+            问诊
+          </a-tag>
+          <span class="consult-name">{{ sessions.current.name }}</span>
+        </div>
+
+        <div class="spacer"></div>
+
+        <div class="header-actions">
+          <a-button-group size="small">
+            <a-button @click="openSessions" title="问诊列表">
+              <template #icon><UnorderedListOutlined /></template>
+              列表
+            </a-button>
+            <a-button @click="openKnowledge" title="知识库">
+              <template #icon><BookOutlined /></template>
+              知识库
+            </a-button>
+            <a-button @click="openGlobalSettings" title="全局设置">
+              <template #icon><SettingOutlined /></template>
+            </a-button>
+          </a-button-group>
+
+          <a-divider type="vertical" style="margin: 0 8px; height: 24px;" />
+
+          <a-button type="primary" size="small" @click="openConsultationSettings">
+            <template #icon><SettingOutlined /></template>
+            问诊设置
+          </a-button>
+        </div>
+
+        <div class="disclaimer">
+          <WarningOutlined style="margin-right: 4px;" />
+          学术研讨用，不替代诊疗
         </div>
       </div>
     </a-layout-header>
     <a-layout>
-      <a-layout-content style="padding: 16px; height: calc(100vh - 64px); overflow: hidden;">
-        <!-- <a-alert
-          type="warning"
-          show-icon
-          message="【本内容仅供参考，身体不适尽早就医】"
-          style="margin-bottom: 12px;"
-        /> -->
-        <a-row :gutter="16" align="stretch" style="height: 100%;">
+      <a-layout-content style="padding: 12px 16px; height: calc(100vh - 52px); overflow: hidden;">
+        <a-row :gutter="12" align="stretch" style="height: 100%;">
           <a-col :span="16" style="height: 100%;">
             <DiscussionPanel class="discussion-panel-host" />
           </a-col>
@@ -45,6 +72,13 @@
 
 <script setup>
 import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
+import {
+  MessageOutlined,
+  BookOutlined,
+  SettingOutlined,
+  UnorderedListOutlined,
+  WarningOutlined
+} from '@ant-design/icons-vue'
 import DiscussionPanel from './components/DiscussionPanel.vue'
 import StatusPanel from './components/StatusPanel.vue'
 import GlobalSettingsModal from './components/GlobalSettingsModal.vue'
@@ -88,9 +122,7 @@ let saveTimer = null
 onMounted(() => {
   window.addEventListener('open-settings', handleOpenConsultationSettings)
   window.addEventListener('open-global-settings', handleOpenGlobalSettings)
-  // 初始化问诊列表并切换到当前问诊
   sessions.init()
-  // 监听咨询状态变更并自动保存到本地
   watch(
     () => consult.$state,
     () => {
@@ -112,56 +144,44 @@ onBeforeUnmount(() => {
 html, body, #app { height: 100%; }
 
 .app-header {
-  background: linear-gradient(135deg, #0f172a 0%, #1c2f4f 70%, #1f3f68 100%);
-  padding: 4px 20px 8px;
+  background: linear-gradient(135deg, #0f172a 0%, #1c2f4f 50%, #1f3f68 100%);
+  padding: 0 16px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.25);
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.2);
   color: #e7efff;
   line-height: normal;
-  min-height: 56px;
+  height: 52px;
 }
 
 .header-inner {
   width: 100%;
+  height: 100%;
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
-  flex-wrap: nowrap;
 }
 
 .app-brand {
   display: flex;
   align-items: center;
   gap: 10px;
-  min-width: 0;
-  flex: 1 1 auto;
-}
-
-.brand-line {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
 }
 
 .logo {
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.35);
-  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
 }
 
 .brand-text {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  min-width: 0;
+  gap: 1px;
 }
 
 .brand-title {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 700;
   letter-spacing: 0.02em;
   color: #f8fbff;
@@ -169,30 +189,74 @@ html, body, #app { height: 100%; }
 }
 
 .brand-subtitle {
-  font-size: 12px;
-  color: #d6e3ff;
+  font-size: 11px;
+  color: #94a3b8;
   line-height: 1.2;
+}
+
+.header-divider {
+  width: 1px;
+  height: 28px;
+  background: rgba(255, 255, 255, 0.15);
+  margin: 0 4px;
+}
+
+.consultation-info {
+  display: flex;
+  align-items: center;
+  padding: 4px 0;
+}
+
+.consult-name {
+  font-size: 13px;
+  color: #e2e8f0;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+
+.header-actions :deep(.ant-btn-group .ant-btn) {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.15);
+  color: #e2e8f0;
+}
+
+.header-actions :deep(.ant-btn-group .ant-btn:hover) {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.header-actions :deep(.ant-btn-group .ant-btn-primary) {
+  background: #1890ff;
+  border-color: #1890ff;
+}
+
+.header-actions :deep(.ant-btn-group .ant-btn-primary:hover) {
+  background: #40a9ff;
+  border-color: #40a9ff;
 }
 
 .disclaimer {
-  padding: 4px 8px;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.08);
-  color: #ffe6b0;
-  font-size: 11px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  backdrop-filter: blur(6px);
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
-.app-actions {
   display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  flex: 0 0 auto;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #fbbf24;
+  font-size: 11px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  white-space: nowrap;
 }
 
 .discussion-panel-host,
@@ -203,7 +267,6 @@ html, body, #app { height: 100%; }
   min-height: 0;
 }
 
-/* Custom scrollbar styles */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -225,14 +288,12 @@ html, body, #app { height: 100%; }
 }
 
 @media (max-width: 992px) {
-  .header-inner { flex-wrap: wrap; }
-  .brand-subtitle { white-space: normal; }
-  .app-actions { width: 100%; justify-content: flex-start; }
+  .disclaimer { display: none; }
+  .consult-name { max-width: 120px; }
 }
 
-@media (max-width: 640px) {
-  .brand-title { font-size: 17px; }
-  .brand-subtitle { font-size: 11px; }
-  .app-header { padding: 12px 14px; }
+@media (max-width: 768px) {
+  .consultation-info { display: none; }
+  .header-divider { display: none; }
 }
 </style>
