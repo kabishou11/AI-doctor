@@ -21,12 +21,6 @@
             <a-button type="text" size="small" @click="showPresetModal = true" title="加载预设知识库">
               <BookOutlined />
             </a-button>
-            <a-button type="text" size="small" @click="showRetrievalConfig = true" title="检索配置">
-              <SettingOutlined />
-            </a-button>
-            <a-button type="text" size="small" @click="showEmbeddingConfig = true" title="向量模型配置">
-              <AimOutlined />
-            </a-button>
           </a-space>
         </div>
 
@@ -65,22 +59,24 @@
 
         <!-- 搜索和筛选 -->
         <div class="kb-search">
+          <div class="search-label"><SearchOutlined /> 关键词搜索</div>
           <a-input-search
             v-model:value="searchQuery"
-            placeholder="搜索文档..."
+            placeholder="输入文档标题或内容关键词..."
             allow-clear
             @search="handleSearch"
             @change="handleSearch"
           />
+          <div class="search-label" style="margin-top: 10px;"><TagOutlined /> 按标签筛选</div>
           <a-select
             v-model:value="filterTags"
             mode="multiple"
             allow-clear
             show-search
             :options="tagOptions"
-            placeholder="按标签筛选"
+            placeholder="选择标签过滤文档（可多选）"
             :filter-option="filterOption"
-            style="width: 100%; margin-top: 8px;"
+            style="width: 100%;"
             :max-tag-count="2"
           />
         </div>
@@ -299,195 +295,60 @@
       </a-form>
     </a-modal>
 
-    <!-- 检索配置弹窗 -->
-    <a-modal
-      v-model:open="showRetrievalConfig"
-      title="检索配置"
-      width="700px"
-      @ok="saveRetrievalSettings"
-      @cancel="showRetrievalConfig = false"
-    >
-      <a-alert type="info" show-icon message="检索策略配置" description="配置知识库的检索方式，包括检索策略、向量权重、分块策略等。" style="margin-bottom: 16px;" />
-      <a-tabs v-model:activeKey="configTab">
-        <a-tab-pane key="retrieval" tab="检索策略">
-          <a-form layout="vertical">
-            <a-form-item label="检索策略">
-              <a-radio-group v-model:value="retrievalConfig.strategy">
-                <a-radio value="hybrid">混合检索（推荐）</a-radio>
-                <a-radio value="vector">向量检索</a-radio>
-                <a-radio value="keyword">关键词检索</a-radio>
-              </a-radio-group>
-            </a-form-item>
-            <a-row :gutter="12">
-              <a-col :span="12">
-                <a-form-item label="Top-K 返回数量">
-                  <a-input-number v-model:value="retrievalConfig.topK" :min="1" :max="20" style="width: 100%;" />
-                </a-form-item>
-              </a-col>
-              <a-col :span="12">
-                <a-form-item label="向量权重">
-                  <a-slider v-model:value="retrievalConfig.vectorWeight" :min="0" :max="1" :step="0.1" :marks="{ 0: '0', 0.5: '0.5', 1: '1' }" />
-                  <div class="slider-hint">
-                    <span>关键词为主</span>
-                    <span>向量为主</span>
-                  </div>
-                </a-form-item>
-              </a-col>
-            </a-row>
-            <a-form-item label="BM25 关键词检索">
-              <a-switch v-model:checked="retrievalConfig.bm25Enabled" />
-              <span style="margin-left: 8px; color: #8c8c8c;">启用基于词频的关键词匹配</span>
-            </a-form-item>
-            <a-row :gutter="12" v-if="retrievalConfig.bm25Enabled">
-              <a-col :span="12">
-                <a-form-item label="BM25 k1 参数">
-                  <a-input-number v-model:value="retrievalConfig.bm25K1" :min="0.5" :max="3" :step="0.1" style="width: 100%;" />
-                </a-form-item>
-              </a-col>
-              <a-col :span="12">
-                <a-form-item label="BM25 b 参数">
-                  <a-input-number v-model:value="retrievalConfig.bm25B" :min="0" :max="1" :step="0.1" style="width: 100%;" />
-                </a-form-item>
-              </a-col>
-            </a-row>
-            <a-form-item label="结果去重">
-              <a-switch v-model:checked="retrievalConfig.enableDeduplication" />
-              <span style="margin-left: 8px; color: #8c8c8c;">合并来自同一文档的重复结果</span>
-            </a-form-item>
-          </a-form>
-        </a-tab-pane>
-        <a-tab-pane key="chunking" tab="分块策略">
-          <a-form layout="vertical">
-            <a-form-item label="分块策略">
-              <a-radio-group v-model:value="embeddingConfig.chunkStrategy">
-                <a-radio value="sentence">句子级别（推荐）</a-radio>
-                <a-radio value="paragraph">段落级别</a-radio>
-                <a-radio value="fixed">固定长度</a-radio>
-              </a-radio-group>
-            </a-form-item>
-            <a-row :gutter="12">
-              <a-col :span="12">
-                <a-form-item label="分块大小">
-                  <a-input-number v-model:value="embeddingConfig.chunkSize" :min="100" :max="2000" :step="50" style="width: 100%;" />
-                  <span style="color: #8c8c8c; font-size: 12px;">每块最大字符数</span>
-                </a-form-item>
-              </a-col>
-              <a-col :span="12">
-                <a-form-item label="重叠字符">
-                  <a-input-number v-model:value="embeddingConfig.chunkOverlap" :min="0" :max="500" :step="10" style="width: 100%;" />
-                  <span style="color: #8c8c8c; font-size: 12px;">相邻块重叠的字符数</span>
-                </a-form-item>
-              </a-col>
-            </a-row>
-            <a-alert type="info" show-icon message="分块策略说明" description="句子级别适合医学指南等结构化内容；段落级别适合有明显分隔的文档；固定长度适合统一格式的内容。" style="margin-top: 8px;" />
-          </a-form>
-        </a-tab-pane>
-        <a-tab-pane key="rerank" tab="重排设置">
-          <a-form layout="vertical">
-            <a-form-item label="启用重排">
-              <a-switch v-model:checked="retrievalConfig.rerankEnabled" />
-              <span style="margin-left: 8px; color: #8c8c8c;">在初步检索后对结果进行相关性重排</span>
-            </a-form-item>
-            <a-row :gutter="12" v-if="retrievalConfig.rerankEnabled">
-              <a-col :span="12">
-                <a-form-item label="重排 Top-N">
-                  <a-input-number v-model:value="retrievalConfig.rerankTopN" :min="1" :max="10" style="width: 100%;" />
-                  <span style="color: #8c8c8c; font-size: 12px;">对前 N 个结果进行重排</span>
-                </a-form-item>
-              </a-col>
-            </a-row>
-            <a-alert type="info" show-icon message="重排说明" description="重排功能会在初步检索后，使用额外的相关性模型对结果进行二次排序，提升检索质量。" style="margin-top: 8px;" />
-          </a-form>
-        </a-tab-pane>
-      </a-tabs>
-    </a-modal>
-
-    <!-- Embedding 配置弹窗 -->
-    <a-modal
-      v-model:open="showEmbeddingConfig"
-      title="向量模型配置"
-      width="600px"
-      @ok="saveEmbeddingSettings"
-      @cancel="showEmbeddingConfig = false"
-    >
-      <a-form layout="vertical">
-        <a-alert type="info" show-icon message="Embedding 模型配置" description="选择向量模型服务商和模型名称。不同的 embedding 模型会影响向量检索的效果。" style="margin-bottom: 16px;" />
-        <a-form-item label="服务商">
-          <a-select v-model:value="embeddingConfig.provider">
-            <a-select-option value="modelscope">魔搭社区（DashScope）</a-select-option>
-            <a-select-option value="openai">OpenAI</a-select-option>
-            <a-select-option value="minimax">MiniMax</a-select-option>
-            <a-select-option value="siliconflow">硅基流动</a-select-option>
-            <a-select-option value="custom">自定义</a-select-option>
-          </a-select>
-        </a-form-item>
-        <a-form-item label="模型名称">
-          <a-select
-            v-model:value="embeddingConfig.model"
-            show-search
-            allow-create
-            :options="modelOptionsByProvider[embeddingConfig.provider] || []"
-            placeholder="选择或输入模型名称"
-            style="width: 100%;"
-          />
-          <div class="model-hints">
-            <span v-if="embeddingConfig.provider === 'modelscope'">推荐：text-embedding-v3、text-embedding-3-small</span>
-            <span v-if="embeddingConfig.provider === 'openai'">推荐：text-embedding-3-small、text-embedding-ada-002</span>
-            <span v-if="embeddingConfig.provider === 'minimax'">推荐：embedding-model-v1</span>
-            <span v-if="embeddingConfig.provider === 'siliconflow'">推荐：BAAI/bge-large-zh-v1.5</span>
-          </div>
-        </a-form-item>
-        <a-form-item label="API Key">
-          <a-input-password v-model:value="embeddingConfig.apiKey" placeholder="输入 API Key（sk-... 或 ms-...）" />
-        </a-form-item>
-        <a-form-item label="自定义 Base URL">
-          <a-input v-model:value="embeddingConfig.baseUrl" placeholder="留空使用默认值" />
-          <div class="model-hints" v-if="embeddingConfig.provider === 'modelscope'">
-            ms- 开头：api-inference.modelscope.cn；sk- 开头：dashscope.aliyuncs.com
-          </div>
-        </a-form-item>
-      </a-form>
-    </a-modal>
-
     <!-- 预设知识库弹窗 -->
     <a-modal
       v-model:open="showPresetModal"
       title="加载预设知识库"
-      @ok="loadPresetKnowledge"
+      @ok="loadSelectedPresets"
       @cancel="showPresetModal = false"
       :confirm-loading="loadingPreset"
+      :ok-text="selectedPresets.length > 0 ? `加载 ${selectedPresets.length} 个集合` : '加载全部'"
     >
-      <a-space direction="vertical" style="width: 100%;">
-        <a-alert type="info" show-icon message="预设医学知识库" description="加载包含急救、心血管、药物等医学知识的预设集合和文档。" />
-        <div class="preset-list">
+      <div class="preset-wrapper">
+        <a-alert type="info" show-icon message="预设医学知识库" description="勾选要加载的集合，点击确定导入。已加载的集合不会重复导入。" style="margin-bottom: 16px;" />
+        <a-checkbox-group v-model:value="selectedPresets" class="preset-check-group">
           <div class="preset-item">
-            <FolderOutlined style="color: #f5222d;" />
-            <span class="preset-name">急救知识</span>
-            <span class="preset-count">3 篇文档</span>
+            <a-checkbox value="col-first-aid">
+              <FolderOutlined style="color: #f5222d;" />
+              <span class="preset-name">急救知识</span>
+            </a-checkbox>
+            <span class="preset-desc">常见急症处理与急救技能</span>
+            <span class="preset-count">3 篇</span>
           </div>
           <div class="preset-item">
-            <FolderOutlined style="color: #eb2f96;" />
-            <span class="preset-name">心血管指南</span>
-            <span class="preset-count">3 篇文档</span>
+            <a-checkbox value="col-cardiovascular">
+              <FolderOutlined style="color: #eb2f96;" />
+              <span class="preset-name">心血管指南</span>
+            </a-checkbox>
+            <span class="preset-desc">心血管疾病诊疗指南</span>
+            <span class="preset-count">3 篇</span>
           </div>
           <div class="preset-item">
-            <FolderOutlined style="color: #722ed1;" />
-            <span class="preset-name">药物相互作用</span>
-            <span class="preset-count">3 篇文档</span>
+            <a-checkbox value="col-drug">
+              <FolderOutlined style="color: #722ed1;" />
+              <span class="preset-name">药物相互作用</span>
+            </a-checkbox>
+            <span class="preset-desc">常用药物配伍与禁忌</span>
+            <span class="preset-count">3 篇</span>
           </div>
           <div class="preset-item">
-            <FolderOutlined style="color: #13c2c2;" />
-            <span class="preset-name">呼吸系统</span>
-            <span class="preset-count">3 篇文档</span>
+            <a-checkbox value="col-respiratory">
+              <FolderOutlined style="color: #13c2c2;" />
+              <span class="preset-name">呼吸系统</span>
+            </a-checkbox>
+            <span class="preset-desc">呼吸系统疾病诊治</span>
+            <span class="preset-count">3 篇</span>
           </div>
           <div class="preset-item">
-            <FolderOutlined style="color: #fa8c16;" />
-            <span class="preset-name">糖尿病管理</span>
-            <span class="preset-count">3 篇文档</span>
+            <a-checkbox value="col-diabetes">
+              <FolderOutlined style="color: #fa8c16;" />
+              <span class="preset-name">糖尿病管理</span>
+            </a-checkbox>
+            <span class="preset-desc">糖尿病患者管理与教育</span>
+            <span class="preset-count">3 篇</span>
           </div>
-        </div>
-        <div class="preset-total">共 5 个集合，15 篇医学知识文档</div>
-      </a-space>
+        </a-checkbox-group>
+      </div>
     </a-modal>
   </a-drawer>
 </template>
@@ -512,17 +373,46 @@ import {
   UploadOutlined,
   MoreOutlined,
   InboxOutlined,
-  SettingOutlined,
   BookOutlined
 } from '@ant-design/icons-vue'
 import { useKnowledgeStore } from '../store/knowledge'
 import { parseFileToText } from '../utils/textParser'
-import { embedWithModelScope } from '../api/embeddings'
 
 const props = defineProps({ open: { type: Boolean, default: false } })
 const emit = defineEmits(['update:open'])
 
 const store = useKnowledgeStore()
+
+// 预设知识库数据
+const PRESET_COLLECTIONS = [
+  { id: 'col-first-aid', name: '急救知识', color: '#f5222d' },
+  { id: 'col-cardiovascular', name: '心血管指南', color: '#eb2f96' },
+  { id: 'col-drug', name: '药物相互作用', color: '#722ed1' },
+  { id: 'col-respiratory', name: '呼吸系统', color: '#13c2c2' },
+  { id: 'col-diabetes', name: '糖尿病管理', color: '#fa8c16' }
+]
+
+const PRESET_DOCS = [
+  // 急救知识
+  { id: 'doc-first-aid-1', collectionId: 'col-first-aid', title: '心肺复苏术（CPR）操作指南', tags: ['急救', 'CPR', '心肺复苏', '心脏骤停'], excerpt: '心肺复苏术是抢救心脏骤停患者的关键技能，包括胸外按压和人工呼吸。', content: '心肺复苏术（CPR）操作指南\n\n一、适用场景\n当发现患者突然意识丧失、没有呼吸或呼吸异常、无脉搏时，应立即启动心肺复苏。\n\n二、操作步骤\n1. 确保现场安全\n2. 检查意识与呼吸（看、听、感觉，不超过10秒）\n3. 呼叫急救（拨打120，取AED）\n4. 胸外按压：两乳头连线中点，深度5-6厘米，频率100-120次/分钟\n5. 人工呼吸（可选）：每30次按压后给2次人工呼吸\n6. 使用AED：取得后立即开机，按语音提示操作\n\n三、注意事项\n- 持续按压直到急救人员到达或患者恢复意识\n- 不会人工呼吸时可只进行单纯胸外按压\n- AED分析时必须确保无人接触患者' },
+  { id: 'doc-first-aid-2', collectionId: 'col-first-aid', title: '海姆立克急救法（气道异物梗阻）', tags: ['急救', '气道异物', '窒息', '海姆立克'], excerpt: '海姆立克急救法是处理气道异物梗阻的标准方法。', content: '海姆立克急救法（气道异物梗阻）\n\n一、适用场景\n患者进食或异物入口后突然不能说话、不能咳嗽、无法呼吸，用力捏住喉咙，面部或嘴唇发青。\n\n二、操作步骤\n1. 背部叩击：用力在两肩胛骨之间拍打5次\n2. 腹部冲击（海姆立克手法）：站于患者身后，双手环抱腰部，一手握拳抵住患者腹部（脐上约2横指处），快速向内向上冲击5次\n3. 反复交替进行背部叩击和腹部冲击，直到异物排出\n\n三、特殊人群\n- 孕妇/肥胖者：冲击位置改为胸骨下半部\n- 婴儿：采用5次拍背+5次压胸法，面部朝下骑跨在手臂上\n\n四、注意事项\n- 不要在异物可见时用手去掏\n- 冲击时注意力度，避免损伤' },
+  { id: 'doc-first-aid-3', collectionId: 'col-first-aid', title: '急性心肌梗死急救流程', tags: ['急救', '心肌梗死', '胸痛', '心脏病'], excerpt: '急性心肌梗死的紧急识别与急救处理流程。', content: '急性心肌梗死急救流程\n\n一、识别典型症状\n- 突发剧烈胸痛或压迫感，持续超过20分钟\n- 疼痛可放射至左臂、颈部、下颌、背部\n- 伴有大汗淋漓、恶心呕吐、呼吸困难\n- 含服硝酸甘油症状不缓解\n\n二、急救步骤\n1. 立即让患者停止活动，安静卧位\n2. 拨打120急救电话\n3. 测量血压（若血压不低，可舌下含服硝酸甘油）\n4. 若患者既往有阿司匹林过敏史，可嚼服300mg阿司匹林\n5. 如患者出现心脏骤停，立即进行心肺复苏\n6. 尽可能获取既往病史和用药信息\n\n三、注意事项\n- 争分夺秒，尽早送至有PCI条件的医院\n- 不要自行驾车送患者\n- 保持患者情绪稳定' },
+  // 心血管指南
+  { id: 'doc-cardio-1', collectionId: 'col-cardiovascular', title: '高血压诊疗指南', tags: ['高血压', '心血管', '慢性病'], excerpt: '高血压的诊断标准与药物治疗原则。', content: '高血压诊疗指南\n\n一、诊断标准\n- 收缩压≥140mmHg和/或舒张压≥90mmHg（诊室测量）\n- 家庭自测血压≥135/85mmHg\n- 24小时动态血压均值≥130/80mmHg\n\n二、血压控制目标\n- 一般患者：<140/90mmHg\n- 能耐受者：<130/80mmHg\n- 老年患者（≥65岁）：收缩压<150mmHg，可耐受则降至<140mmHg\n\n三、药物治疗\n一线药物：ACEI/ARB、β受体阻滞剂、CCB、利尿剂\n联合用药原则：小剂量开始，2-3种药物联合\n\n四、生活方式干预\n- 限盐（<6g/天）\n- 减重（BMI<24）\n- 戒烟限酒\n- 适量运动（每周≥150分钟中等强度）' },
+  { id: 'doc-cardio-2', collectionId: 'col-cardiovascular', title: '房颤抗凝治疗方案', tags: ['房颤', '抗凝', '心血管', '卒中'], excerpt: '心房颤动患者的抗凝治疗决策与用药方案。', content: '房颤抗凝治疗方案\n\n一、卒中风险评估（CHA₂DS₂-VASc评分）\n心衰1分、高血压1分、年龄≥75岁2分、糖尿病1分、血管疾病1分、年龄65-74岁1分、女性1分\n\n二、抗凝适应证\n- CHA₂DS₂-VASc≥2分（男性）/≥3分（女性）：推荐抗凝\n- CHA₂DS₂-VASc=1分（男性）/2分（女性）：考虑抗凝\n\n三、常用抗凝药物\n- 华法林：需定期监测INR，目标2.0-3.0\n- 新型口服抗凝药（NOAC）：达比加群、利伐沙班、阿哌沙班、艾多沙班\n\n四、注意事项\n- 使用抗凝药物前需评估出血风险（HAS-BLED评分）\n- 定期复查肝肾功能\n- 避免突然停药' },
+  { id: 'doc-cardio-3', collectionId: 'col-cardiovascular', title: '急性心衰处理流程', tags: ['心衰', '急性', '心血管', '急救'], excerpt: '急性心力衰竭的紧急处理与药物治疗。', content: '急性心衰处理流程\n\n一、紧急评估\n- 生命体征（血压、心率、呼吸、血氧）\n- 体位：端坐位或半卧位，双腿下垂\n- 立即吸氧（SpO2<90%时）\n- 心电监护\n\n二、药物治疗\n1. 利尿剂：呋塞米静脉推注（首选）\n2. 血管扩张剂：硝酸甘油（收缩压>90mmHg时可用）\n3. 正性肌力药：多巴酚丁胺、西地兰（心房颤动伴快心室率时）\n\n三、排除诱因\n- 感染、贫血、电解质紊乱、药物依从性差\n\n四、转运指征\n- 症状不缓解、血流动力学不稳定时\n- 尽早转入ICU或心内科病房' },
+  // 药物相互作用
+  { id: 'doc-drug-1', collectionId: 'col-drug', title: '常用口服降糖药一览', tags: ['糖尿病', '降糖药', '药物'], excerpt: '各类口服降糖药的作用机制与禁忌。', content: '常用口服降糖药一览\n\n一、双胍类（二甲双胍）\n- 机制：减少肝糖输出，增加外周组织对胰岛素敏感性\n- 优点：不引起低血糖，不增加体重\n- 禁忌：eGFR<30ml/min/1.73m²、严重肝功能不全、造影剂使用前后\n\n二、磺脲类\n- 机制：刺激胰岛β细胞分泌胰岛素\n- 代表：格列美脲、格列齐特\n- 风险：低血糖、体重增加\n\n三、格列奈类\n- 机制：餐时促泌，快速短效\n- 代表：瑞格列奈、那格列奈\n- 适用：餐后血糖升高为主\n\n四、DPP-4抑制剂\n- 机制：抑制胰高血糖素样肽-1（GLP-1）降解\n- 代表：西格列汀、利格列汀\n- 优点：不引起低血糖、体重中性\n\n五、SGLT-2抑制剂\n- 机制：抑制肾脏葡萄糖重吸收\n- 代表：达格列净、恩格列净\n- 额外获益：心肾保护、减重' },
+  { id: 'doc-drug-2', collectionId: 'col-drug', title: '抗生素联用禁忌', tags: ['抗生素', '药物相互作用', '禁忌'], excerpt: '常见抗生素之间的配伍禁忌与注意事项。', content: '抗生素联用禁忌\n\n一、同类抗生素叠加毒性\n- 氨基糖苷类+多粘菌素：肾毒性叠加\n- 两种肾毒性药物联用：庆大霉素+万古霉素\n\n二、药效降低\n- 四环素类+金属离子（钙、镁、铝、铁）：形成络合物吸收减少\n- 青霉素类+大环内酯类（阿奇霉素）：后者抑菌，前者杀菌，疗效降低\n- 氟喹诺酮类+抗酸剂/铁剂：吸收显著降低\n\n三、不良反应加重\n- 氟喹诺酮类+茶碱：茶碱血药浓度升高，中毒风险增加\n- 大环内酯类（红霉素）+他汀类（辛伐他汀）：横纹肌溶解风险增加\n- 甲硝唑+酒精：双硫仑样反应\n\n四、繁殖期杀菌剂与快速抑菌剂\n- 青霉素（繁殖期杀菌剂）+氯霉素（快速抑菌剂）：后者拮抗前者效果\n- 提示：同类或作用机制相似的药物通常不宜联用' },
+  { id: 'doc-drug-3', collectionId: 'col-drug', title: '抗凝药与抗血小板药联用', tags: ['抗凝', '抗血小板', '药物相互作用'], excerpt: '抗凝药与抗血小板药物联合使用的风险与指征。', content: '抗凝药与抗血小板药联用\n\n一、联合用药指征\n- 房颤合并冠心病支架术后（双联→三联→双联）\n- 深静脉血栓合并外周血管疾病\n\n二、三联治疗（抗凝+双抗血小板）\n- 出血风险显著增加（消化道出血、颅内出血）\n- 通常仅在支架术后早期（1-4周）使用\n- 后续转为双联（抗凝+单抗血小板）\n\n三、药物选择\n- NOAC（利伐沙班、达比加群）优于华法林（出血风险相对较低）\n- 抗血小板药优先选择氯吡格雷（较阿司匹林胃肠道出血风险低）\n- 加用PPI（如泮托拉唑）降低消化道出血风险\n\n四、监测\n- 定期复查血常规（贫血）、粪潜血\n- 关注肾功能变化（抗凝药剂量调整）\n- 避免同时使用NSAIDs' },
+  // 呼吸系统
+  { id: 'doc-resp-1', collectionId: 'col-respiratory', title: 'COPD急性加重处理', tags: ['COPD', '呼吸', '急性加重'], excerpt: '慢性阻塞性肺疾病急性加重的识别与处理。', content: 'COPD急性加重处理\n\n一、识别急性加重\n- 呼吸困难加重、喘息加剧\n- 咳嗽加剧、痰量增多或痰液变脓\n- 全身不适、发热\n\n二、严重程度评估\n- 呼吸频率>25次/分\n- 心率>110次/分\n- 急性意识障碍\n- 低氧血症（SpO2<90%）或高碳酸血症加重\n\n三、治疗\n1. 支气管舒张剂：SABA（沙丁胺醇）+SAMA（异丙托溴铵）雾化吸入\n2. 糖皮质激素：泼尼松龙30-40mg/天，5-7天\n3. 抗生素：（若疑似细菌感染）阿莫西林/克拉维酸、左氧氟沙星\n4. 氧疗：目标SpO2 88-92%\n5. 无创通气（NIV）：PaCO2>45mmHg，pH<7.35时考虑\n\n四、转诊指征\n- 严重呼吸困难、对初始治疗反应差\n- 意识障碍加重\n- 低氧血症难以纠正' },
+  { id: 'doc-resp-2', collectionId: 'col-respiratory', title: '哮喘急性发作处置', tags: ['哮喘', '呼吸', '急性发作'], excerpt: '支气管哮喘急性发作的分级处理与用药。', content: '哮喘急性发作处置\n\n一、严重程度分级\n- 轻度：步行时气短，可平卧，说话正常\n- 中度：说话中断，喜坐位，呼吸急促\n- 重度：休息时气短，前倾位，说话只能单词\n- 危重：不能说话，意识模糊，寂静肺\n\n二、峰流速（PEF）评估\n- PEF>80%预计值：轻度发作\n- PEF 60-80%：中度\n- PEF<60%：重度/危重\n\n三、急救用药\n1. 吸入SABA（沙丁胺醇）：每20分钟4-10喷，共1小时\n2. 糖皮质激素：全身用（口服泼尼松40-60mg或静脉甲泼尼龙）\n3. 危重时：肾上腺素0.3-0.5mg皮下（仅用于过敏性反应）\n4. 吸氧：维持SpO2 93-95%\n\n四、脱离危险后\n- ICS/LABA（吸入糖皮质激素+长效β2激动剂）维持治疗\n- 确认诱因（过敏原、感染、运动）\n- 患者教育：正确使用吸入器' },
+  { id: 'doc-resp-3', collectionId: 'col-respiratory', title: '肺部感染抗生素选择', tags: ['肺炎', '抗生素', '呼吸', '感染'], excerpt: '社区获得性肺炎与医院获得性肺炎的抗生素经验性治疗。', content: '肺部感染抗生素选择\n\n一、社区获得性肺炎（CAP）\n1. 无合并症青壮年：\n  - 阿莫西林或多西环素或大环内酯类\n2. 有合并症（心肺疾病、糖尿病等）：\n  - β内酰胺类（阿莫西林/克拉维酸/头孢泊肟）+大环内酯类\n  - 或呼吸氟喹诺酮类（莫西沙星、左氧氟沙星）单用\n\n二、医院获得性肺炎（HAP）/呼吸机相关肺炎（VAP）\n- 轻症：β内酰胺类/β内酰胺酶抑制剂复合制剂\n- 危重：碳青霉烯类±氨基糖苷类±万古霉素\n- 评估耐药菌风险（MRSA、铜绿假单胞菌）\n\n三、抗生素使用原则\n- 48-72小时后评估疗效\n- 体温正常、临床稳定后可口服续贯\n- 疗程：CAP 5-7天，HAP/VAP 7-8天\n- 注意：不要盲目联合广谱抗生素\n\n四、辅助检查\n- 血常规、C反应蛋白、降钙素原\n- 痰培养+药敏\n- 胸部X线或CT' },
+  // 糖尿病管理
+  { id: 'doc-diab-1', collectionId: 'col-diabetes', title: '糖尿病诊断标准与分型', tags: ['糖尿病', '诊断', '分型'], excerpt: '糖尿病的诊断标准与四种主要分型。', content: '糖尿病诊断标准与分型\n\n一、诊断标准（满足以下任一条件）\n- 空腹血糖（FPG）≥7.0mmol/L（空腹定义：至少8小时无热量摄入）\n- OGTT 2小时血糖≥11.1mmol/L\n- 糖化血红蛋白（HbA1c）≥6.5%\n- 随机血糖≥11.1mmol/L+典型高血糖症状\n\n二、糖尿病前期（糖调节受损）\n- 空腹血糖受损（IFG）：FPG 5.6-6.9mmol/L\n- 糖耐量减低（IGT）：OGTT 2h血糖7.8-11.0mmol/L\n- HbA1c 5.7-6.4%\n\n三、分型\n1. 1型糖尿病：胰岛β细胞破坏，胰岛素绝对缺乏\n2. 2型糖尿病：胰岛素抵抗为主+相对胰岛素分泌不足\n3. 妊娠糖尿病（GDM）：妊娠期间首次发现\n4. 其他特殊类型：单基因突变、胰腺疾病、药物性等\n\n四、1型与2型糖尿病特点\n- 1型：发病年龄轻（<30岁）、起病急、有酮症倾向、需要胰岛素治疗\n- 2型：发病年龄大（>40岁）、起病慢、超重/肥胖常见、口服降糖药有效' },
+  { id: 'doc-diab-2', collectionId: 'col-diabetes', title: '糖尿病慢性并发症筛查', tags: ['糖尿病', '并发症', '筛查'], excerpt: '糖尿病主要慢性并发症的筛查频率与目标值。', content: '糖尿病慢性并发症筛查\n\n一、糖尿病视网膜病变\n- 筛查频率：诊断时即进行眼底检查，此后每1-2年一次\n- 方法：散瞳后眼底镜检或眼底照相\n- 转诊指征：任何程度的黄斑水肿、严重NPDR、PDR\n\n二、糖尿病肾病\n- 筛查频率：诊断时及此后每年一次\n- 方法：尿白蛋白/肌酐比值（ACR）+ eGFR\n- 诊断：ACR≥30mg/g或eGFR<60ml/min/1.73m²\n- ACEI/ARB是主要治疗药物\n\n三、糖尿病神经病变\n- 筛查频率：诊断时及此后每年一次\n- 方法：10g尼龙丝检查、音叉振动觉、踝反射\n- 足部溃疡是主要风险事件\n\n四、糖尿病大血管并发症\n- 冠心病：心电图、运动负荷试验（必要时）\n- 脑血管病：颈动脉超声\n- 外周血管病：踝肱指数（ABI）\n\n五、筛查频率总结\n| 并发症 | 筛查频率 |\n|--------|----------|\n| 视网膜病变 | 1-2年 |\n| 肾病 | 1年 |\n| 神经病变 | 1年 |\n| 大血管病变 | 1-2年 |' },
+  { id: 'doc-diab-3', collectionId: 'col-diabetes', title: '糖尿病患者血糖控制目标', tags: ['糖尿病', '血糖控制', 'HbA1c'], excerpt: '不同人群的HbA1c控制目标与低血糖防范。', content: '糖尿病患者血糖控制目标\n\n一、一般控制目标\n- HbA1c<7%（相当于平均血糖≈8.6mmol/L）\n- 空腹血糖：4.4-7.2mmol/L\n- 餐后2小时血糖：<10mmol/L\n\n二、个体化目标\n- 较年轻、病程短、无并发症：HbA1c<6.5%（若无低血糖风险）\n- 老年患者、预期寿命有限、严重低血糖史：HbA1c<8.0%或<8.5%\n- 合并心血管疾病：避免严格控制（低血糖增加心血管事件）\n\n三、孕期血糖目标\n- 餐前：≤5.3mmol/L\n- 餐后1小时：≤7.8mmol/L\n- 餐后2小时：≤6.7mmol/L\n- HbA1c<6%（孕前）\n\n四、低血糖防范\n- HbA1c过低（<6%）需警惕低血糖风险\n- 使用胰岛素或磺脲类药物的患者需教育低血糖识别与处理\n- 血糖<3.9mmol/L即需干预\n- 随身携带糖果或葡萄糖片\n\n五、监测频率\n- 胰岛素治疗：每日多次（餐前+睡前）\n- 口服药：每周1-2天（空腹+餐后）\n- 稳定期：每月1-2天' }]
 
 // 状态
 const searchQuery = ref('')
@@ -534,31 +424,10 @@ const editingTags = ref([])
 const saving = ref(false)
 const vectorizing = ref(false)
 
-// 配置相关状态
-const showRetrievalConfig = ref(false)
-const showEmbeddingConfig = ref(false)
+// 预设选择
 const showPresetModal = ref(false)
+const selectedPresets = ref([])
 const loadingPreset = ref(false)
-const configTab = ref('retrieval')
-
-const modelOptionsByProvider = {
-  modelscope: [
-    { label: 'text-embedding-v3', value: 'text-embedding-v3' },
-    { label: 'text-embedding-3-small', value: 'text-embedding-3-small' }
-  ],
-  openai: [
-    { label: 'text-embedding-3-small', value: 'text-embedding-3-small' },
-    { label: 'text-embedding-3-large', value: 'text-embedding-3-large' },
-    { label: 'text-embedding-ada-002', value: 'text-embedding-ada-002' }
-  ],
-  minimax: [
-    { label: 'embedding-model-v1', value: 'embedding-model-v1' }
-  ],
-  siliconflow: [
-    { label: 'BAAI/bge-large-zh-v1.5', value: 'BAAI/bge-large-zh-v1.5' },
-    { label: 'BAAI/bge-base-zh-v1.5', value: 'BAAI/bge-base-zh-v1.5' }
-  ]
-}
 
 // 集合管理
 const showCreateCollection = ref(false)
@@ -587,18 +456,6 @@ const embeddingConfig = reactive({
   chunkOverlap: 100
 })
 
-const retrievalConfig = reactive({
-  strategy: 'hybrid',
-  topK: 5,
-  vectorWeight: 0.5,
-  bm25Enabled: true,
-  bm25K1: 1.5,
-  bm25B: 0.75,
-  rerankEnabled: false,
-  rerankTopN: 3,
-  enableDeduplication: true
-})
-
 // 集合
 const collections = computed(() => store.collections)
 
@@ -608,7 +465,7 @@ onMounted(() => {
 })
 
 function syncConfig() {
-  // Sync embedding config
+  // Sync embedding config from global settings
   const ec = store.embeddingConfig || {}
   embeddingConfig.provider = ec.provider || 'modelscope'
   embeddingConfig.model = ec.model || 'text-embedding-v3'
@@ -617,18 +474,6 @@ function syncConfig() {
   embeddingConfig.chunkStrategy = ec.chunkStrategy || 'sentence'
   embeddingConfig.chunkSize = ec.chunkSize || 800
   embeddingConfig.chunkOverlap = ec.chunkOverlap || 100
-
-  // Sync retrieval config
-  const rc = store.retrievalConfig || {}
-  retrievalConfig.strategy = rc.strategy || 'hybrid'
-  retrievalConfig.topK = rc.topK || 5
-  retrievalConfig.vectorWeight = rc.vectorWeight ?? 0.5
-  retrievalConfig.bm25Enabled = rc.bm25Enabled !== undefined ? rc.bm25Enabled : true
-  retrievalConfig.bm25K1 = rc.bm25K1 || 1.5
-  retrievalConfig.bm25B = rc.bm25B || 0.75
-  retrievalConfig.rerankEnabled = rc.rerankEnabled !== undefined ? rc.rerankEnabled : false
-  retrievalConfig.rerankTopN = rc.rerankTopN || 3
-  retrievalConfig.enableDeduplication = rc.enableDeduplication !== undefined ? rc.enableDeduplication : true
 }
 
 function selectCollection(id) {
@@ -879,44 +724,41 @@ async function handleFileUpload(file) {
   return false
 }
 
-function saveRetrievalSettings() {
-  store.setRetrievalConfig({
-    strategy: retrievalConfig.strategy,
-    topK: retrievalConfig.topK,
-    vectorWeight: retrievalConfig.vectorWeight,
-    bm25Enabled: retrievalConfig.bm25Enabled,
-    bm25K1: retrievalConfig.bm25K1,
-    bm25B: retrievalConfig.bm25B,
-    rerankEnabled: retrievalConfig.rerankEnabled,
-    rerankTopN: retrievalConfig.rerankTopN,
-    enableDeduplication: retrievalConfig.enableDeduplication
-  })
-  store.setEmbeddingConfig({
-    chunkStrategy: embeddingConfig.chunkStrategy,
-    chunkSize: embeddingConfig.chunkSize,
-    chunkOverlap: embeddingConfig.chunkOverlap
-  })
-  showRetrievalConfig.value = false
-  message.success('检索配置已保存')
-}
-
-function saveEmbeddingSettings() {
-  store.setEmbeddingConfig({
-    provider: embeddingConfig.provider,
-    model: embeddingConfig.model,
-    apiKey: embeddingConfig.apiKey,
-    baseUrl: embeddingConfig.baseUrl
-  })
-  showEmbeddingConfig.value = false
-  message.success('向量模型配置已保存')
-}
-
-async function loadPresetKnowledge() {
+async function loadSelectedPresets() {
+  if (selectedPresets.value.length === 0) {
+    message.warning('请先勾选要加载的知识库集合')
+    return
+  }
   loadingPreset.value = true
   try {
-    const result = store.initializePresetKnowledge()
-    message.success(`已加载 ${result.collections} 个集合，共 ${result.docs} 篇文档`)
+    let colsAdded = 0
+    let docsAdded = 0
+    for (const colId of selectedPresets.value) {
+      const col = PRESET_COLLECTIONS.find(c => c.id === colId)
+      if (col && !store.collections.find(c => c.id === col.id)) {
+        store.addCollection({ name: col.name, color: col.color })
+        colsAdded++
+      }
+      const docs = PRESET_DOCS.filter(d => d.collectionId === colId)
+      for (const docData of docs) {
+        const exists = store.docs.find(d => d.title === docData.title && d.content === docData.content)
+        if (!exists) {
+          store.addDoc({
+            title: docData.title,
+            content: docData.content,
+            tags: docData.tags,
+            excerpt: docData.excerpt,
+            collectionId: colId
+          })
+          docsAdded++
+        }
+      }
+    }
+    // mark as initialized so future calls don't double-add
+    localStorage.setItem('kb_preset_initialized_v2', 'true')
+    message.success(`已加载 ${colsAdded} 个集合，${docsAdded} 篇文档`)
     showPresetModal.value = false
+    selectedPresets.value = []
   } catch (e) {
     message.error('加载预设知识库失败')
   } finally {
@@ -1206,21 +1048,38 @@ watch(() => props.open, (v) => {
 }
 
 /* 预设知识库列表 */
-.preset-list {
-  padding: 8px 0;
+.preset-wrapper {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.preset-check-group {
+  width: 100%;
+}
+
+.preset-check-group :deep(.ant-checkbox-wrapper) {
+  display: flex;
+  align-items: flex-start;
+  width: 100%;
+  padding: 10px 8px;
+  border-radius: 6px;
+  transition: background 0.2s;
+  margin-left: 0 !important;
+}
+
+.preset-check-group :deep(.ant-checkbox-wrapper:hover) {
+  background: #f5f5f5;
+}
+
+.preset-check-group :deep(.ant-checkbox-wrapper + .ant-checkbox-wrapper) {
+  margin-left: 0;
 }
 
 .preset-item {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 12px;
-  border-radius: 6px;
-  transition: background 0.2s;
-}
-
-.preset-item:hover {
-  background: #f5f5f5;
+  width: 100%;
 }
 
 .preset-name {
@@ -1228,17 +1087,27 @@ watch(() => props.open, (v) => {
   color: #262626;
 }
 
-.preset-count {
-  margin-left: auto;
+.preset-desc {
+  flex: 1;
   color: #8c8c8c;
   font-size: 12px;
+  margin-left: 4px;
 }
 
-.preset-total {
-  text-align: center;
+.preset-count {
   color: #8c8c8c;
-  padding: 12px 0;
-  border-top: 1px solid #f0f0f0;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/* 搜索标签 */
+.search-label {
+  font-size: 12px;
+  color: #8c8c8c;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 /* Slider hint */
