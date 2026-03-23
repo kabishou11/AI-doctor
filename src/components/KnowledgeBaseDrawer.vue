@@ -490,7 +490,7 @@
       </a-space>
     </a-modal>
   </a-drawer>
-
+</template>
 <script setup>
 import { computed, reactive, ref, watch, onMounted } from 'vue'
 import {
@@ -946,7 +946,6 @@ watch(() => props.open, (v) => {
   }
 })
 </script>
-
 <style scoped>
 .kb-container {
   display: flex;
@@ -1258,4 +1257,3 @@ watch(() => props.open, (v) => {
   margin-top: 4px;
 }
 </style>
-</template>
