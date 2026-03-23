@@ -306,48 +306,14 @@
     >
       <div class="preset-wrapper">
         <a-alert type="info" show-icon message="预设医学知识库" description="勾选要加载的集合，点击确定导入。已加载的集合不会重复导入。" style="margin-bottom: 16px;" />
-        <a-checkbox-group v-model:value="selectedPresets" class="preset-check-group">
-          <div class="preset-item">
-            <a-checkbox value="col-first-aid">
-              <FolderOutlined style="color: #f5222d;" />
-              <span class="preset-name">急救知识</span>
-            </a-checkbox>
-            <span class="preset-desc">常见急症处理与急救技能</span>
-            <span class="preset-count">3 篇</span>
-          </div>
-          <div class="preset-item">
-            <a-checkbox value="col-cardiovascular">
-              <FolderOutlined style="color: #eb2f96;" />
-              <span class="preset-name">心血管指南</span>
-            </a-checkbox>
-            <span class="preset-desc">心血管疾病诊疗指南</span>
-            <span class="preset-count">3 篇</span>
-          </div>
-          <div class="preset-item">
-            <a-checkbox value="col-drug">
-              <FolderOutlined style="color: #722ed1;" />
-              <span class="preset-name">药物相互作用</span>
-            </a-checkbox>
-            <span class="preset-desc">常用药物配伍与禁忌</span>
-            <span class="preset-count">3 篇</span>
-          </div>
-          <div class="preset-item">
-            <a-checkbox value="col-respiratory">
-              <FolderOutlined style="color: #13c2c2;" />
-              <span class="preset-name">呼吸系统</span>
-            </a-checkbox>
-            <span class="preset-desc">呼吸系统疾病诊治</span>
-            <span class="preset-count">3 篇</span>
-          </div>
-          <div class="preset-item">
-            <a-checkbox value="col-diabetes">
-              <FolderOutlined style="color: #fa8c16;" />
-              <span class="preset-name">糖尿病管理</span>
-            </a-checkbox>
-            <span class="preset-desc">糖尿病患者管理与教育</span>
-            <span class="preset-count">3 篇</span>
-          </div>
-        </a-checkbox-group>
+        <div class="preset-row" v-for="col in PRESET_COLLECTIONS" :key="col.id">
+          <a-checkbox v-model:value="selectedPresets" :value="col.id" class="preset-row-check">
+            <FolderOutlined :style="{ color: col.color }" />
+            <span class="preset-row-name">{{ col.name }}</span>
+          </a-checkbox>
+          <span class="preset-row-desc">{{ getPresetDesc(col.id) }}</span>
+          <a-tag size="small">{{ getPresetDocCount(col.id) }} 篇</a-tag>
+        </div>
       </div>
     </a-modal>
   </a-drawer>
@@ -724,6 +690,22 @@ async function handleFileUpload(file) {
   return false
 }
 
+const PRESET_COLLECTION_META = {
+  'col-first-aid':       { desc: '常见急症处理与急救技能', count: 3 },
+  'col-cardiovascular':   { desc: '心血管疾病诊疗指南', count: 3 },
+  'col-drug':            { desc: '常用药物配伍与禁忌', count: 3 },
+  'col-respiratory':      { desc: '呼吸系统疾病诊治', count: 3 },
+  'col-diabetes':         { desc: '糖尿病患者管理与教育', count: 3 }
+}
+
+function getPresetDesc(colId) {
+  return PRESET_COLLECTION_META[colId]?.desc || ''
+}
+
+function getPresetDocCount(colId) {
+  return PRESET_COLLECTION_META[colId]?.count || 0
+}
+
 async function loadSelectedPresets() {
   if (selectedPresets.value.length === 0) {
     message.warning('请先勾选要加载的知识库集合')
@@ -1053,51 +1035,35 @@ watch(() => props.open, (v) => {
   overflow-y: auto;
 }
 
-.preset-check-group {
-  width: 100%;
-}
-
-.preset-check-group :deep(.ant-checkbox-wrapper) {
+.preset-row {
   display: flex;
-  align-items: flex-start;
-  width: 100%;
+  align-items: center;
+  gap: 10px;
   padding: 10px 8px;
   border-radius: 6px;
   transition: background 0.2s;
-  margin-left: 0 !important;
 }
 
-.preset-check-group :deep(.ant-checkbox-wrapper:hover) {
+.preset-row:hover {
   background: #f5f5f5;
 }
 
-.preset-check-group :deep(.ant-checkbox-wrapper + .ant-checkbox-wrapper) {
-  margin-left: 0;
-}
-
-.preset-item {
-  display: flex;
+.preset-row-check {
+  display: flex !important;
   align-items: center;
-  gap: 12px;
-  width: 100%;
+  gap: 8px;
+  min-width: 160px;
 }
 
-.preset-name {
+.preset-row-name {
   font-weight: 500;
   color: #262626;
 }
 
-.preset-desc {
+.preset-row-desc {
   flex: 1;
   color: #8c8c8c;
   font-size: 12px;
-  margin-left: 4px;
-}
-
-.preset-count {
-  color: #8c8c8c;
-  font-size: 12px;
-  white-space: nowrap;
 }
 
 /* 搜索标签 */

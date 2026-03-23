@@ -758,14 +758,31 @@ const selectedKnowledgePreview = computed(() => {
 async function autoRecommendKnowledge() {
   const patientProblem = store.patientCase?.currentProblem || ''
   const pastHistory = store.patientCase?.pastHistory || ''
-  const searchText = `${patientProblem} ${pastHistory}`.trim()
-  if (!searchText) {
+
+  // Collect text from linked consultations (finalSummary + patient case)
+  const linkedText = (store.linkedConsultations || []).map((linked) => {
+    const parts = []
+    if (linked.patientCase?.currentProblem) parts.push(linked.patientCase.currentProblem)
+    if (linked.patientCase?.pastHistory) parts.push(linked.patientCase.pastHistory)
+    if (linked.finalSummary?.content) parts.push(linked.finalSummary.content)
+    return parts.join(' ')
+  }).filter(Boolean).join(' ')
+
+  // Collect text from current discussion history (doctor messages)
+  const discussionText = (store.discussionHistory || [])
+    .filter((msg) => msg.role === 'doctor' && msg.content)
+    .map((msg) => msg.content)
+    .join(' ')
+
+  const allContext = `${patientProblem} ${pastHistory} ${linkedText} ${discussionText}`.trim()
+
+  if (!allContext) {
     recommendedKnowledge.value = []
     return
   }
   autoRecommending.value = true
   try {
-    const searchWords = searchText.toLowerCase().split(/[\s,，。；!?]+/).filter((w) => w.length > 1)
+    const searchWords = allContext.toLowerCase().split(/[\s,，。；!?，。、\n\r]+/).filter((w) => w.length > 1)
     const docs = knowledge.docs || []
     const scored = docs.map((doc) => {
       const title = (doc.title || '').toLowerCase()
