@@ -14,9 +14,20 @@
             <FolderOutlined />
             <span>知识库集合</span>
           </div>
-          <a-button type="text" size="small" @click="showCreateCollection = true" title="新建集合">
-            <PlusOutlined />
-          </a-button>
+          <a-space>
+            <a-button type="text" size="small" @click="showCreateCollection = true" title="新建集合">
+              <PlusOutlined />
+            </a-button>
+            <a-button type="text" size="small" @click="showPresetModal = true" title="加载预设知识库">
+              <BookOutlined />
+            </a-button>
+            <a-button type="text" size="small" @click="showRetrievalConfig = true" title="检索配置">
+              <SettingOutlined />
+            </a-button>
+            <a-button type="text" size="small" @click="showEmbeddingConfig = true" title="向量模型配置">
+              <AimOutlined />
+            </a-button>
+          </a-space>
         </div>
 
         <!-- 集合列表 -->
@@ -287,6 +298,197 @@
         </a-form-item>
       </a-form>
     </a-modal>
+
+    <!-- 检索配置弹窗 -->
+    <a-modal
+      v-model:open="showRetrievalConfig"
+      title="检索配置"
+      width="700px"
+      @ok="saveRetrievalSettings"
+      @cancel="showRetrievalConfig = false"
+    >
+      <a-alert type="info" show-icon message="检索策略配置" description="配置知识库的检索方式，包括检索策略、向量权重、分块策略等。" style="margin-bottom: 16px;" />
+      <a-tabs v-model:activeKey="configTab">
+        <a-tab-pane key="retrieval" tab="检索策略">
+          <a-form layout="vertical">
+            <a-form-item label="检索策略">
+              <a-radio-group v-model:value="retrievalConfig.strategy">
+                <a-radio value="hybrid">混合检索（推荐）</a-radio>
+                <a-radio value="vector">向量检索</a-radio>
+                <a-radio value="keyword">关键词检索</a-radio>
+              </a-radio-group>
+            </a-form-item>
+            <a-row :gutter="12">
+              <a-col :span="12">
+                <a-form-item label="Top-K 返回数量">
+                  <a-input-number v-model:value="retrievalConfig.topK" :min="1" :max="20" style="width: 100%;" />
+                </a-form-item>
+              </a-col>
+              <a-col :span="12">
+                <a-form-item label="向量权重">
+                  <a-slider v-model:value="retrievalConfig.vectorWeight" :min="0" :max="1" :step="0.1" :marks="{ 0: '0', 0.5: '0.5', 1: '1' }" />
+                  <div class="slider-hint">
+                    <span>关键词为主</span>
+                    <span>向量为主</span>
+                  </div>
+                </a-form-item>
+              </a-col>
+            </a-row>
+            <a-form-item label="BM25 关键词检索">
+              <a-switch v-model:checked="retrievalConfig.bm25Enabled" />
+              <span style="margin-left: 8px; color: #8c8c8c;">启用基于词频的关键词匹配</span>
+            </a-form-item>
+            <a-row :gutter="12" v-if="retrievalConfig.bm25Enabled">
+              <a-col :span="12">
+                <a-form-item label="BM25 k1 参数">
+                  <a-input-number v-model:value="retrievalConfig.bm25K1" :min="0.5" :max="3" :step="0.1" style="width: 100%;" />
+                </a-form-item>
+              </a-col>
+              <a-col :span="12">
+                <a-form-item label="BM25 b 参数">
+                  <a-input-number v-model:value="retrievalConfig.bm25B" :min="0" :max="1" :step="0.1" style="width: 100%;" />
+                </a-form-item>
+              </a-col>
+            </a-row>
+            <a-form-item label="结果去重">
+              <a-switch v-model:checked="retrievalConfig.enableDeduplication" />
+              <span style="margin-left: 8px; color: #8c8c8c;">合并来自同一文档的重复结果</span>
+            </a-form-item>
+          </a-form>
+        </a-tab-pane>
+        <a-tab-pane key="chunking" tab="分块策略">
+          <a-form layout="vertical">
+            <a-form-item label="分块策略">
+              <a-radio-group v-model:value="embeddingConfig.chunkStrategy">
+                <a-radio value="sentence">句子级别（推荐）</a-radio>
+                <a-radio value="paragraph">段落级别</a-radio>
+                <a-radio value="fixed">固定长度</a-radio>
+              </a-radio-group>
+            </a-form-item>
+            <a-row :gutter="12">
+              <a-col :span="12">
+                <a-form-item label="分块大小">
+                  <a-input-number v-model:value="embeddingConfig.chunkSize" :min="100" :max="2000" :step="50" style="width: 100%;" />
+                  <span style="color: #8c8c8c; font-size: 12px;">每块最大字符数</span>
+                </a-form-item>
+              </a-col>
+              <a-col :span="12">
+                <a-form-item label="重叠字符">
+                  <a-input-number v-model:value="embeddingConfig.chunkOverlap" :min="0" :max="500" :step="10" style="width: 100%;" />
+                  <span style="color: #8c8c8c; font-size: 12px;">相邻块重叠的字符数</span>
+                </a-form-item>
+              </a-col>
+            </a-row>
+            <a-alert type="info" show-icon message="分块策略说明" description="句子级别适合医学指南等结构化内容；段落级别适合有明显分隔的文档；固定长度适合统一格式的内容。" style="margin-top: 8px;" />
+          </a-form>
+        </a-tab-pane>
+        <a-tab-pane key="rerank" tab="重排设置">
+          <a-form layout="vertical">
+            <a-form-item label="启用重排">
+              <a-switch v-model:checked="retrievalConfig.rerankEnabled" />
+              <span style="margin-left: 8px; color: #8c8c8c;">在初步检索后对结果进行相关性重排</span>
+            </a-form-item>
+            <a-row :gutter="12" v-if="retrievalConfig.rerankEnabled">
+              <a-col :span="12">
+                <a-form-item label="重排 Top-N">
+                  <a-input-number v-model:value="retrievalConfig.rerankTopN" :min="1" :max="10" style="width: 100%;" />
+                  <span style="color: #8c8c8c; font-size: 12px;">对前 N 个结果进行重排</span>
+                </a-form-item>
+              </a-col>
+            </a-row>
+            <a-alert type="info" show-icon message="重排说明" description="重排功能会在初步检索后，使用额外的相关性模型对结果进行二次排序，提升检索质量。" style="margin-top: 8px;" />
+          </a-form>
+        </a-tab-pane>
+      </a-tabs>
+    </a-modal>
+
+    <!-- Embedding 配置弹窗 -->
+    <a-modal
+      v-model:open="showEmbeddingConfig"
+      title="向量模型配置"
+      width="600px"
+      @ok="saveEmbeddingSettings"
+      @cancel="showEmbeddingConfig = false"
+    >
+      <a-form layout="vertical">
+        <a-alert type="info" show-icon message="Embedding 模型配置" description="选择向量模型服务商和模型名称。不同的 embedding 模型会影响向量检索的效果。" style="margin-bottom: 16px;" />
+        <a-form-item label="服务商">
+          <a-select v-model:value="embeddingConfig.provider">
+            <a-select-option value="modelscope">魔搭社区（DashScope）</a-select-option>
+            <a-select-option value="openai">OpenAI</a-select-option>
+            <a-select-option value="minimax">MiniMax</a-select-option>
+            <a-select-option value="siliconflow">硅基流动</a-select-option>
+            <a-select-option value="custom">自定义</a-select-option>
+          </a-select>
+        </a-form-item>
+        <a-form-item label="模型名称">
+          <a-select
+            v-model:value="embeddingConfig.model"
+            show-search
+            allow-create
+            :options="modelOptionsByProvider[embeddingConfig.provider] || []"
+            placeholder="选择或输入模型名称"
+            style="width: 100%;"
+          />
+          <div class="model-hints">
+            <span v-if="embeddingConfig.provider === 'modelscope'">推荐：text-embedding-v3、text-embedding-3-small</span>
+            <span v-if="embeddingConfig.provider === 'openai'">推荐：text-embedding-3-small、text-embedding-ada-002</span>
+            <span v-if="embeddingConfig.provider === 'minimax'">推荐：embedding-model-v1</span>
+            <span v-if="embeddingConfig.provider === 'siliconflow'">推荐：BAAI/bge-large-zh-v1.5</span>
+          </div>
+        </a-form-item>
+        <a-form-item label="API Key">
+          <a-input-password v-model:value="embeddingConfig.apiKey" placeholder="输入 API Key（sk-... 或 ms-...）" />
+        </a-form-item>
+        <a-form-item label="自定义 Base URL">
+          <a-input v-model:value="embeddingConfig.baseUrl" placeholder="留空使用默认值" />
+          <div class="model-hints" v-if="embeddingConfig.provider === 'modelscope'">
+            ms- 开头：api-inference.modelscope.cn；sk- 开头：dashscope.aliyuncs.com
+          </div>
+        </a-form-item>
+      </a-form>
+    </a-modal>
+
+    <!-- 预设知识库弹窗 -->
+    <a-modal
+      v-model:open="showPresetModal"
+      title="加载预设知识库"
+      @ok="loadPresetKnowledge"
+      @cancel="showPresetModal = false"
+      :confirm-loading="loadingPreset"
+    >
+      <a-space direction="vertical" style="width: 100%;">
+        <a-alert type="info" show-icon message="预设医学知识库" description="加载包含急救、心血管、药物等医学知识的预设集合和文档。" />
+        <div class="preset-list">
+          <div class="preset-item">
+            <FolderOutlined style="color: #f5222d;" />
+            <span class="preset-name">急救知识</span>
+            <span class="preset-count">3 篇文档</span>
+          </div>
+          <div class="preset-item">
+            <FolderOutlined style="color: #eb2f96;" />
+            <span class="preset-name">心血管指南</span>
+            <span class="preset-count">3 篇文档</span>
+          </div>
+          <div class="preset-item">
+            <FolderOutlined style="color: #722ed1;" />
+            <span class="preset-name">药物相互作用</span>
+            <span class="preset-count">3 篇文档</span>
+          </div>
+          <div class="preset-item">
+            <FolderOutlined style="color: #13c2c2;" />
+            <span class="preset-name">呼吸系统</span>
+            <span class="preset-count">3 篇文档</span>
+          </div>
+          <div class="preset-item">
+            <FolderOutlined style="color: #fa8c16;" />
+            <span class="preset-name">糖尿病管理</span>
+            <span class="preset-count">3 篇文档</span>
+          </div>
+        </div>
+        <div class="preset-total">共 5 个集合，15 篇医学知识文档</div>
+      </a-space>
+    </a-modal>
   </a-drawer>
 
 <script setup>
@@ -309,7 +511,9 @@ import {
   DeleteOutlined,
   UploadOutlined,
   MoreOutlined,
-  InboxOutlined
+  InboxOutlined,
+  SettingOutlined,
+  BookOutlined
 } from '@ant-design/icons-vue'
 import { useKnowledgeStore } from '../store/knowledge'
 import { parseFileToText } from '../utils/textParser'
@@ -330,6 +534,32 @@ const editingTags = ref([])
 const saving = ref(false)
 const vectorizing = ref(false)
 
+// 配置相关状态
+const showRetrievalConfig = ref(false)
+const showEmbeddingConfig = ref(false)
+const showPresetModal = ref(false)
+const loadingPreset = ref(false)
+const configTab = ref('retrieval')
+
+const modelOptionsByProvider = {
+  modelscope: [
+    { label: 'text-embedding-v3', value: 'text-embedding-v3' },
+    { label: 'text-embedding-3-small', value: 'text-embedding-3-small' }
+  ],
+  openai: [
+    { label: 'text-embedding-3-small', value: 'text-embedding-3-small' },
+    { label: 'text-embedding-3-large', value: 'text-embedding-3-large' },
+    { label: 'text-embedding-ada-002', value: 'text-embedding-ada-002' }
+  ],
+  minimax: [
+    { label: 'embedding-model-v1', value: 'embedding-model-v1' }
+  ],
+  siliconflow: [
+    { label: 'BAAI/bge-large-zh-v1.5', value: 'BAAI/bge-large-zh-v1.5' },
+    { label: 'BAAI/bge-base-zh-v1.5', value: 'BAAI/bge-base-zh-v1.5' }
+  ]
+}
+
 // 集合管理
 const showCreateCollection = ref(false)
 const editingCollection = ref(null)
@@ -346,36 +576,59 @@ const uploadCollectionId = ref('')
 const uploadAutoVectorize = ref(true)
 const uploadTags = ref([])
 
-// 配置
+// 配置 - 从 store 同步
 const embeddingConfig = reactive({
-  model: '',
+  provider: 'modelscope',
+  model: 'text-embedding-v3',
   apiKey: '',
-  baseUrl: ''
+  baseUrl: '',
+  chunkStrategy: 'sentence',
+  chunkSize: 800,
+  chunkOverlap: 100
 })
+
 const retrievalConfig = reactive({
+  strategy: 'hybrid',
   topK: 5,
-  keywordWeight: 0.5
+  vectorWeight: 0.5,
+  bm25Enabled: true,
+  bm25K1: 1.5,
+  bm25B: 0.75,
+  rerankEnabled: false,
+  rerankTopN: 3,
+  enableDeduplication: true
 })
 
 // 集合
-const COLLECTIONS_KEY = 'kb_collections_v1'
-const collections = ref([])
+const collections = computed(() => store.collections)
 
 onMounted(() => {
-  loadCollections()
+  // Load collections from store
+  syncConfig()
 })
 
-function loadCollections() {
-  try {
-    const raw = localStorage.getItem(COLLECTIONS_KEY)
-    collections.value = raw ? JSON.parse(raw) : []
-  } catch (e) {
-    collections.value = []
-  }
-}
+function syncConfig() {
+  // Sync embedding config
+  const ec = store.embeddingConfig || {}
+  embeddingConfig.provider = ec.provider || 'modelscope'
+  embeddingConfig.model = ec.model || 'text-embedding-v3'
+  embeddingConfig.apiKey = ec.apiKey || ''
+  embeddingConfig.baseUrl = ec.baseUrl || ''
+  embeddingConfig.chunkStrategy = ec.chunkStrategy || 'sentence'
+  embeddingConfig.chunkSize = ec.chunkSize || 800
+  embeddingConfig.chunkOverlap = ec.chunkOverlap || 100
 
-function saveCollections() {
-  localStorage.setItem(COLLECTIONS_KEY, JSON.stringify(collections.value))
+  // Sync retrieval config
+  const rc = store.retrievalConfig || {}
+  retrievalConfig.strategy = rc.strategy || 'hybrid'
+  retrievalConfig.topK = rc.topK || 5
+  retrievalConfig.vectorWeight = rc.vectorWeight ?? 0.5
+  retrievalConfig.bm25Enabled = rc.bm25Enabled !== undefined ? rc.bm25Enabled : true
+  retrievalConfig.bm25K1 = rc.bm25K1 || 1.5
+  retrievalConfig.bm25B = rc.bm25B || 0.75
+  retrievalConfig.rerankEnabled = rc.rerankEnabled !== undefined ? rc.rerankEnabled : false
+  retrievalConfig.rerankTopN = rc.rerankTopN || 3
+  retrievalConfig.enableDeduplication = rc.enableDeduplication !== undefined ? rc.enableDeduplication : true
 }
 
 function selectCollection(id) {
@@ -412,20 +665,17 @@ function saveCollection() {
   }
 
   if (editingCollection.value) {
-    const idx = collections.value.findIndex(c => c.id === editingCollection.value.id)
-    if (idx !== -1) {
-      collections.value[idx] = { ...collections.value[idx], name: collectionForm.name, color: collectionForm.color }
-    }
-  } else {
-    collections.value.push({
-      id: `col-${Date.now()}`,
+    store.updateCollection(editingCollection.value.id, {
       name: collectionForm.name,
-      color: collectionForm.color,
-      createdAt: new Date().toISOString()
+      color: collectionForm.color
+    })
+  } else {
+    store.addCollection({
+      name: collectionForm.name,
+      color: collectionForm.color
     })
   }
 
-  saveCollections()
   closeCollectionModal()
   message.success(editingCollection.value ? '集合已更新' : '集合已创建')
 }
@@ -442,8 +692,7 @@ function deleteCollection(id) {
     title: '确认删除此集合？',
     content: '删除集合不会删除其中的文档，文档将移至"未分类"',
     onOk() {
-      collections.value = collections.value.filter(c => c.id !== id)
-      saveCollections()
+      store.removeCollection(id)
       if (selectedCollectionId.value === id) {
         selectedCollectionId.value = ''
       }
@@ -470,7 +719,7 @@ function handleTagsChange(tags) {
 
 const currentCollection = computed(() => {
   if (!editingDoc.value?.collectionId) return null
-  return collections.value.find(c => c.id === editingDoc.value.collectionId)
+  return store.collections.find(c => c.id === editingDoc.value.collectionId)
 })
 
 const hasVectors = computed(() => {
@@ -570,7 +819,16 @@ async function vectorizeDoc() {
 
   try {
     vectorizing.value = true
-    syncConfig()
+    // Save current config to store before vectorizing
+    store.setEmbeddingConfig({
+      provider: embeddingConfig.provider,
+      model: embeddingConfig.model,
+      apiKey: embeddingConfig.apiKey,
+      baseUrl: embeddingConfig.baseUrl,
+      chunkStrategy: embeddingConfig.chunkStrategy,
+      chunkSize: embeddingConfig.chunkSize,
+      chunkOverlap: embeddingConfig.chunkOverlap
+    })
     const count = await store.reembedDoc(editingDoc.value.id)
     message.success(`已生成 ${count} 个向量切片`)
   } catch (e) {
@@ -590,7 +848,16 @@ function deleteDoc() {
 
 async function handleFileUpload(file) {
   try {
-    syncConfig()
+    // Save current config to store before ingesting
+    store.setEmbeddingConfig({
+      provider: embeddingConfig.provider,
+      model: embeddingConfig.model,
+      apiKey: embeddingConfig.apiKey,
+      baseUrl: embeddingConfig.baseUrl,
+      chunkStrategy: embeddingConfig.chunkStrategy,
+      chunkSize: embeddingConfig.chunkSize,
+      chunkOverlap: embeddingConfig.chunkOverlap
+    })
     const text = await parseFileToText(file)
     const title = file.name.replace(/\.[^/.]+$/, '')
 
@@ -612,9 +879,49 @@ async function handleFileUpload(file) {
   return false
 }
 
-function syncConfig() {
-  store.setEmbeddingConfig(embeddingConfig)
-  store.setRetrievalConfig(retrievalConfig)
+function saveRetrievalSettings() {
+  store.setRetrievalConfig({
+    strategy: retrievalConfig.strategy,
+    topK: retrievalConfig.topK,
+    vectorWeight: retrievalConfig.vectorWeight,
+    bm25Enabled: retrievalConfig.bm25Enabled,
+    bm25K1: retrievalConfig.bm25K1,
+    bm25B: retrievalConfig.bm25B,
+    rerankEnabled: retrievalConfig.rerankEnabled,
+    rerankTopN: retrievalConfig.rerankTopN,
+    enableDeduplication: retrievalConfig.enableDeduplication
+  })
+  store.setEmbeddingConfig({
+    chunkStrategy: embeddingConfig.chunkStrategy,
+    chunkSize: embeddingConfig.chunkSize,
+    chunkOverlap: embeddingConfig.chunkOverlap
+  })
+  showRetrievalConfig.value = false
+  message.success('检索配置已保存')
+}
+
+function saveEmbeddingSettings() {
+  store.setEmbeddingConfig({
+    provider: embeddingConfig.provider,
+    model: embeddingConfig.model,
+    apiKey: embeddingConfig.apiKey,
+    baseUrl: embeddingConfig.baseUrl
+  })
+  showEmbeddingConfig.value = false
+  message.success('向量模型配置已保存')
+}
+
+async function loadPresetKnowledge() {
+  loadingPreset.value = true
+  try {
+    const result = store.initializePresetKnowledge()
+    message.success(`已加载 ${result.collections} 个集合，共 ${result.docs} 篇文档`)
+    showPresetModal.value = false
+  } catch (e) {
+    message.error('加载预设知识库失败')
+  } finally {
+    loadingPreset.value = false
+  }
 }
 
 function getTagColor(tag) {
@@ -636,11 +943,6 @@ function formatTime(t) {
 watch(() => props.open, (v) => {
   if (v) {
     syncConfig()
-    embeddingConfig.model = store.embeddingConfig?.model || 'text-embedding-v3'
-    embeddingConfig.apiKey = store.embeddingConfig?.apiKey || ''
-    embeddingConfig.baseUrl = store.embeddingConfig?.baseUrl || ''
-    retrievalConfig.topK = store.retrievalConfig?.topK || 5
-    retrievalConfig.keywordWeight = store.retrievalConfig?.keywordWeight ?? 0.5
   }
 })
 </script>
@@ -903,4 +1205,57 @@ watch(() => props.open, (v) => {
 .color-tag.selected {
   font-weight: bold;
 }
+
+/* 预设知识库列表 */
+.preset-list {
+  padding: 8px 0;
+}
+
+.preset-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  transition: background 0.2s;
+}
+
+.preset-item:hover {
+  background: #f5f5f5;
+}
+
+.preset-name {
+  font-weight: 500;
+  color: #262626;
+}
+
+.preset-count {
+  margin-left: auto;
+  color: #8c8c8c;
+  font-size: 12px;
+}
+
+.preset-total {
+  text-align: center;
+  color: #8c8c8c;
+  padding: 12px 0;
+  border-top: 1px solid #f0f0f0;
+}
+
+/* Slider hint */
+.slider-hint {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: #8c8c8c;
+  margin-top: 4px;
+}
+
+/* Model hints */
+.model-hints {
+  font-size: 12px;
+  color: #8c8c8c;
+  margin-top: 4px;
+}
 </style>
+</template>
