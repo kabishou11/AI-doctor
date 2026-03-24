@@ -205,24 +205,36 @@
           </a-card>
 
           <!-- 智能推荐 -->
-          <a-card size="small" title="智能推荐" :bordered="false" style="background: #f0f7ff;">
+          <a-card size="small" title="🧭 智能推荐" :bordered="false" style="background: #f0f7ff;">
             <template #extra>
-              <a-button type="link" size="small" @click="autoRecommendKnowledge" :loading="autoRecommending">
-                <ReloadOutlined /> 重新分析
-              </a-button>
+              <a-space>
+                <a-tag v-if="recommendedKnowledge.length > 0" color="blue" style="margin-right: 4px;">
+                  {{ recommendedKnowledge.length }} 条推荐
+                </a-tag>
+                <a-button
+                  type="primary"
+                  size="small"
+                  v-if="recommendedKnowledge.length > 0"
+                  @click="selectAllRecommended"
+                >
+                  <StarOutlined /> 一键全选推荐
+                </a-button>
+                <a-button type="link" size="small" @click="autoRecommendKnowledge" :loading="autoRecommending">
+                  <ReloadOutlined /> {{ recommendedKnowledge.length > 0 ? '重新分析' : '开始分析' }}
+                </a-button>
+              </a-space>
             </template>
             <div v-if="recommendedKnowledge.length > 0">
               <div style="margin-bottom: 8px; color: #595959; font-size: 12px;">
-                根据当前患者问题，系统推荐以下相关知识（点击标签快速选择）：
+                根据当前患者问题分析出以下相关知识（点击标签即可选中，下方列表会高亮显示）：
               </div>
               <a-space wrap>
                 <a-tag
                   v-for="rec in recommendedKnowledge"
                   :key="rec.id"
                   :color="selectedKnowledgeIds.includes(rec.id) ? 'blue' : 'default'"
-                  class="recommend-tag"
+                  style="cursor: pointer; padding: 4px 8px;"
                   @click="toggleKnowledge(rec.id)"
-                  style="cursor: pointer;"
                 >
                   <StarOutlined v-if="selectedKnowledgeIds.includes(rec.id)" />
                   {{ rec.title }}
@@ -231,7 +243,15 @@
               </a-space>
             </div>
             <div v-else style="color: #8c8c8c; font-size: 12px;">
-              暂无推荐，请先输入患者问题或手动选择知识片段
+              <template v-if="!knowledge.docs?.length">
+                知识库为空：请点击上方「管理知识库」加载预设医学知识后再尝试推荐
+              </template>
+              <template v-else-if="!store.patientCase?.currentProblem && !store.linkedConsultations?.length && !store.discussionHistory?.length">
+                请先在「患者信息」标签页输入患者主诉，或关联历史会诊，智能推荐将根据内容自动分析
+              </template>
+              <template v-else>
+                未找到与当前问题直接相关的知识片段，可尝试手动搜索或点击上方「开始分析」重新检索
+              </template>
             </div>
           </a-card>
 
@@ -272,13 +292,18 @@
           <div style="display:flex; gap: 8px; align-items: center; flex-wrap: wrap;">
             <a-space>
               <a-button size="small" @click="selectAllVisible" :disabled="knowledgeOptions.length === 0">
-                全选当前页
+                全选可见
               </a-button>
-              <a-button size="small" @click="deselectAllVisible" :disabled="knowledgeOptions.length === 0">
-                取消当前页
+              <a-button size="small" @click="deselectAllVisible" :disabled="selectedKnowledgeIds.length === 0">
+                取消已选
               </a-button>
-              <a-button size="small" type="primary" @click="selectAllRelated" :disabled="recommendedKnowledge.length === 0">
-                <StarOutlined /> 全选推荐相关
+              <a-button
+                size="small"
+                type="primary"
+                @click="selectAllRecommended"
+                :disabled="recommendedKnowledge.length === 0"
+              >
+                <StarOutlined /> 全选推荐
               </a-button>
             </a-space>
             <a-divider type="vertical" style="margin: 0 4px;" />
@@ -326,16 +351,53 @@
             </a-button>
           </div>
 
-          <!-- 知识列表 -->
-          <a-list
-            v-if="knowledgeOptions.length"
-            :data-source="knowledgeOptions"
-            item-layout="vertical"
-            size="small"
-            :pagination="{ pageSize: 8, showSizeChanger: false }"
-            :render-item="renderKnowledgeItem"
-          />
-          <a-empty v-else description="暂无知识文档，请先在知识库中创建" />
+          <!-- 知识列表（用简单div+checkbox代替a-list，避免分页/渲染问题） -->
+          <div v-if="knowledgeOptions.length > 0" class="knowledge-list-container">
+            <div class="knowledge-list-header">
+              <span style="color: #8c8c8c; font-size: 12px;">
+                共 {{ knowledgeOptions.length }} 条知识片段
+              </span>
+              <span style="color: #52c41a; font-size: 12px;" v-if="selectedKnowledgeIds.length > 0">
+                已选 {{ selectedKnowledgeIds.length }} 条
+              </span>
+            </div>
+            <div class="knowledge-list-scroll">
+              <div
+                v-for="item in knowledgeOptions"
+                :key="item.id"
+                :class="['knowledge-item', { 'knowledge-item-selected': selectedKnowledgeIds.includes(item.id) }]"
+                @click="toggleKnowledge(item.id)"
+              >
+                <a-checkbox
+                  :checked="selectedKnowledgeIds.includes(item.id)"
+                  @click.stop
+                  @change="() => toggleKnowledge(item.id)"
+                />
+                <div class="knowledge-item-body">
+                  <div class="knowledge-item-title">
+                    {{ item.title }}
+                    <a-tag v-if="selectedKnowledgeIds.includes(item.id)" color="green" size="small" style="margin-left: 6px;">已选</a-tag>
+                  </div>
+                  <div class="knowledge-item-desc">{{ item.desc || '无摘要' }}</div>
+                  <div class="knowledge-item-tags">
+                    <a-tag v-for="tag in (item.tags || []).slice(0, 4)" :key="tag" size="small" color="blue">{{ tag }}</a-tag>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <a-result
+            v-else
+            title="知识库为空"
+            sub-title="尚未加载任何知识片段"
+            :icon="h(Empty)"
+          >
+            <template #extra>
+              <a-button type="primary" @click="() => emit('open-knowledge')">
+                <SettingOutlined /> 去知识库管理加载预设医学知识
+              </a-button>
+            </template>
+          </a-result>
         </a-space>
       </a-tab-pane>
     </a-tabs>
@@ -343,12 +405,12 @@
 </template>
 
 <script setup>
-import { ref, watch, h, resolveComponent, computed } from 'vue'
+import { ref, watch, h, computed } from 'vue'
 import { useConsultStore } from '../store'
 import { useGlobalStore } from '../store/global'
 import { useSessionsStore } from '../store/sessions'
 import { useKnowledgeStore } from '../store/knowledge'
-import { message, Modal } from 'ant-design-vue'
+import { message, Modal, Empty } from 'ant-design-vue'
 import {
   SettingOutlined,
   StarOutlined,
@@ -383,8 +445,8 @@ watch(open, (v) => emit('update:open', v))
 
 // ─── 本地状态 ──────────────────────────────────────────────────────────────
 const localConsultationName = ref(store.consultationName || '')
-const localSettings = ref(JSON.parse(JSON.stringify(store.settings)))
-const consultDoctors = ref(JSON.parse(JSON.stringify(store.doctors)))
+const localSettings = ref(JSON.parse(JSON.stringify(store.settings || {})))
+const consultDoctors = ref(JSON.parse(JSON.stringify(store.doctors || [])))
 const linkedConsultations = ref(JSON.parse(JSON.stringify(store.linkedConsultations || [])))
 const selectedToAdd = ref(null)
 const selectedLinkedIds = ref(
@@ -425,8 +487,8 @@ watch(
     if (v) {
       activeTab.value = 'consultSettings'
       localConsultationName.value = store.consultationName || ''
-      localSettings.value = JSON.parse(JSON.stringify(store.settings))
-      consultDoctors.value = JSON.parse(JSON.stringify(store.doctors))
+      localSettings.value = JSON.parse(JSON.stringify(store.settings || {}))
+      consultDoctors.value = JSON.parse(JSON.stringify(store.doctors || []))
       linkedConsultations.value = JSON.parse(JSON.stringify(store.linkedConsultations || []))
       selectedToAdd.value = null
       selectedLinkedIds.value = (store.linkedConsultations || []).map(
@@ -715,22 +777,36 @@ function removeLinkedConsultation(id) {
 
 // ─── 知识库相关 ─────────────────────────────────────────────────────────────
 const knowledgeOptions = computed(() => {
-  let list = knowledge.search(knowledgeSearch.value)
-  if (knowledgeCollectionFilter.value) {
-    list = list.filter((item) => item.collectionId === knowledgeCollectionFilter.value)
-  }
-  if (knowledgeTagFilter.value.length > 0) {
-    list = list.filter((item) =>
-      knowledgeTagFilter.value.every((tag) => (item.tags || []).includes(tag))
-    )
-  }
-  return (list || []).map((item) => ({
-    id: item.id,
-    title: item.title || '未命名文档',
-    desc: item.excerpt || previewText(item.content, 120),
-    tags: item.tags || [],
-    content: item.content || ''
-  }))
+  // 直接访问 knowledge.docs 而不是通过 search() 方法，避免空查询问题
+  const allDocs = knowledge.docs || []
+  const q = (knowledgeSearch.value || '').toLowerCase().trim()
+  const colFilter = knowledgeCollectionFilter.value
+  const tagFilters = knowledgeTagFilter.value
+
+  return allDocs
+    .filter((doc) => {
+      // 集合筛选
+      if (colFilter && doc.collectionId !== colFilter) return false
+      // 标签筛选
+      if (tagFilters.length > 0 && !tagFilters.every((t) => (doc.tags || []).includes(t))) return false
+      // 关键词搜索
+      if (q) {
+        return (
+          (doc.title || '').toLowerCase().includes(q) ||
+          (doc.content || '').toLowerCase().includes(q) ||
+          (doc.tags || []).some((t) => t.toLowerCase().includes(q))
+        )
+      }
+      return true
+    })
+    .map((item) => ({
+      id: item.id,
+      title: item.title || '未命名文档',
+      desc: item.excerpt || previewText(item.content, 120),
+      tags: item.tags || [],
+      content: item.content || '',
+      collectionId: item.collectionId
+    }))
 })
 
 const knowledgeTagOptions = computed(() => {
@@ -762,8 +838,8 @@ async function autoRecommendKnowledge() {
   // Collect text from linked consultations (finalSummary + patient case)
   const linkedText = (store.linkedConsultations || []).map((linked) => {
     const parts = []
-    if (linked.patientCase?.currentProblem) parts.push(linked.patientCase.currentProblem)
-    if (linked.patientCase?.pastHistory) parts.push(linked.patientCase.pastHistory)
+    if (linked.currentProblem) parts.push(linked.currentProblem)
+    if (linked.pastHistory) parts.push(linked.pastHistory)
     if (linked.finalSummary?.content) parts.push(linked.finalSummary.content)
     return parts.join(' ')
   }).filter(Boolean).join(' ')
@@ -808,6 +884,13 @@ async function autoRecommendKnowledge() {
   }
 }
 
+function selectAllRecommended() {
+  const currentSet = new Set(selectedKnowledgeIds.value)
+  recommendedKnowledge.value.forEach((rec) => currentSet.add(rec.id))
+  selectedKnowledgeIds.value = Array.from(currentSet)
+  message.success(`已一键选中 ${recommendedKnowledge.value.length} 条推荐知识`)
+}
+
 function toggleKnowledge(id) {
   const set = new Set(selectedKnowledgeIds.value || [])
   if (set.has(id)) set.delete(id)
@@ -834,42 +917,6 @@ function deselectAllVisible() {
   message.success('已取消当前页选择')
 }
 
-function selectAllRelated() {
-  const currentSet = new Set(selectedKnowledgeIds.value)
-  recommendedKnowledge.value.forEach((rec) => currentSet.add(rec.id))
-  selectedKnowledgeIds.value = Array.from(currentSet)
-  message.success(`已选择 ${recommendedKnowledge.value.length} 个推荐相关片段`)
-}
-
-function renderKnowledgeItem({ item }) {
-  const ACheckbox = resolveComponent('a-checkbox')
-  return h(
-    'a-list-item',
-    null,
-    {
-      default: () =>
-        h('div', { style: { display: 'flex', gap: '12px', alignItems: 'flex-start', padding: '8px 0', width: '100%' } }, [
-          h(ACheckbox, {
-            checked: selectedKnowledgeIds.value.includes(item.id),
-            onChange: () => toggleKnowledge(item.id)
-          }),
-          h('div', { style: { flex: 1, minWidth: 0 } }, [
-            h('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' } }, [
-              h('span', { style: { fontWeight: '600' } }, item.title),
-              selectedKnowledgeIds.value.includes(item.id)
-                ? h('a-tag', { color: 'green', size: 'small' }, '已选')
-                : null
-            ]),
-            h('div', { style: { color: '#8c8c8c', fontSize: '12px', marginBottom: '6px' } }, item.desc || '无摘要'),
-            h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '4px' } },
-              (item.tags || []).map((tag) => h('a-tag', { key: tag, size: 'small', color: 'blue' }, tag))
-            )
-          ])
-        ])
-    }
-  )
-}
-
 // ─── 保存逻辑 ──────────────────────────────────────────────────────────────
 async function onSave() {
   // 验证：问诊名称必填
@@ -882,7 +929,6 @@ async function onSave() {
 
   // 验证：至少需要一位问诊医生
   if (consultDoctors.value.length === 0) {
-    const { default: ConfirmModal } = await import('ant-design-vue')
     Modal.confirm({
       title: '未添加问诊医生',
       content: '当前未添加任何问诊医生，确定要保存吗？',
@@ -1104,6 +1150,84 @@ function doSave() {
 
 /* ── 知识库选中摘要 ─────────────────────────── */
 .selected-knowledge-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+/* ── 知识库列表容器 ────────────────────────── */
+.knowledge-list-container {
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.knowledge-list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: #fafafa;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.knowledge-list-scroll {
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 4px 8px;
+}
+
+.knowledge-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 8px;
+  border-bottom: 1px solid #f5f5f5;
+  cursor: pointer;
+  transition: background 0.15s;
+  border-radius: 6px;
+  margin-bottom: 2px;
+}
+
+.knowledge-item:hover {
+  background: #f0f7ff;
+}
+
+.knowledge-item:last-child {
+  border-bottom: none;
+}
+
+.knowledge-item-selected {
+  background: #e6f7ff;
+}
+
+.knowledge-item-selected:hover {
+  background: #bae7ff;
+}
+
+.knowledge-item-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.knowledge-item-title {
+  font-weight: 600;
+  font-size: 13px;
+  color: #262626;
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+}
+
+.knowledge-item-desc {
+  font-size: 12px;
+  color: #8c8c8c;
+  margin-bottom: 6px;
+  line-height: 1.4;
+}
+
+.knowledge-item-tags {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;

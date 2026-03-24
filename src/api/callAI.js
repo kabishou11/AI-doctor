@@ -199,6 +199,11 @@ async function callModelScope({ apiKey, model, fullPrompt, history, baseUrl }) {
     }
   }
 
-  const msg = errors.length ? errors.join(' | ') : '调用魔搭社区失败'
-  throw new Error(msg)
+  const msg = errors.length
+    ? errors.join(' | ')
+    : '调用魔搭社区失败'
+  const hint = !baseUrl
+    ? '（提示：若模型不可用，请在医生设置中填写该模型对应服务商的 Base URL）'
+    : ''
+  throw new Error(msg + hint)
 }

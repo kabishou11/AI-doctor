@@ -1346,7 +1346,7 @@ function loadEmbeddingConfig() {
         provider: 'modelscope',
         model: 'text-embedding-v3',
         apiKey: '',
-        baseUrl: '',
+        baseUrl: 'https://api-inference.modelscope.cn/v1',
         chunkStrategy: 'sentence',
         chunkSize: 800,
         chunkOverlap: 100,

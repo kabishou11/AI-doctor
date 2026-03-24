@@ -64,7 +64,14 @@
               <a-row :gutter="[12, 0]">
                 <a-col :span="8">
                   <a-form-item label="自定义 Base URL" size="small">
-                    <a-input v-model:value="element.baseUrl" placeholder="留空使用默认" size="small" />
+                    <a-input
+                      v-model:value="element.baseUrl"
+                      :placeholder="element.provider === 'modelscope' ? 'DeepSeek/GLM 等填入服务商地址' : '留空使用默认地址'"
+                      size="small"
+                    />
+                    <div v-if="element.provider === 'modelscope' && !element.baseUrl" style="font-size: 11px; color: #ff7a45; margin-top: 2px;">
+                      提示：DeepSeek/GLM 等模型需填入对应服务商地址，否则可能调用失败
+                    </div>
                   </a-form-item>
                 </a-col>
                 <a-col :span="16">
@@ -316,44 +323,6 @@
         <a-alert v-else type="warning" show-icon message="图片识别已禁用" description="开启上方开关以启用图片识别功能。" />
       </a-tab-pane>
 
-      <!-- 知识库向量 -->
-      <a-tab-pane key="embedding" tab="知识库向量">
-        <div class="section-header">
-          <a-space>
-            <span class="section-icon">&#128218;</span>
-            <span>知识库向量配置</span>
-          </a-space>
-        </div>
-        <a-alert type="info" show-icon message="使用魔搭社区 Embedding 生成向量" description="用于知识库检索。向量化后，在问诊提示词中会加入相似度最高的片段。" style="margin-bottom: 12px;" />
-        <a-card size="small">
-          <a-row :gutter="[12, 0]">
-            <a-col :span="8">
-              <a-form-item label="Embedding 模型" size="small">
-                <a-input v-model:value="localEmbedding.model" placeholder="text-embedding-v3" size="small" />
-              </a-form-item>
-            </a-col>
-            <a-col :span="8">
-              <a-form-item label="API Key" size="small">
-                <a-input-password v-model:value="localEmbedding.apiKey" placeholder="sk-..." size="small" />
-              </a-form-item>
-            </a-col>
-            <a-col :span="8">
-              <a-form-item label="Base URL（可选）" size="small">
-                <a-input v-model:value="localEmbedding.baseUrl" placeholder="留空使用默认 dashscope" size="small" />
-              </a-form-item>
-            </a-col>
-          </a-row>
-          <div style="margin-top: 8px;">
-            <a-button type="primary" :loading="testingEmbedding" @click="testEmbedding" size="small">
-              测试连接
-            </a-button>
-            <span v-if="embeddingTestResult" class="test-result" :class="embeddingTestResult.type" style="margin-left: 12px;">
-              {{ embeddingTestResult.type === 'success' ? '连接成功' : '连接失败' }}：{{ embeddingTestResult.message }}
-            </span>
-          </div>
-        </a-card>
-      </a-tab-pane>
-
       <!-- 导入导出 -->
       <a-tab-pane key="importExport" tab="导入导出">
         <div class="section-header">
@@ -472,16 +441,13 @@ import { ref, watch, computed, h, resolveComponent, nextTick } from 'vue'
 import draggable from 'vuedraggable'
 import { useConsultStore } from '../store'
 import { useGlobalStore } from '../store/global'
-import { useKnowledgeStore } from '../store/knowledge'
 import { message, Modal } from 'ant-design-vue'
 import { callAI } from '../api/callAI'
 import { listModels } from '../api/models'
 import { recognizeImageWithSiliconFlow } from '../api/imageRecognition'
-import { embedWithModelScope } from '../api/embeddings'
 
 const store = useConsultStore()
 const global = useGlobalStore()
-const knowledgeStore = useKnowledgeStore()
 
 const props = defineProps({ open: { type: Boolean, default: false } })
 const emit = defineEmits(['update:open'])
@@ -597,7 +563,6 @@ const localDoctors = ref([])
 const localSettings = ref({})
 const localImageRecognition = ref({})
 const localPresetPrompts = ref([])
-const localEmbedding = ref({})
 const selectedPreset = ref({})
 const modelOptions = ref({})
 const loadingModel = ref({})
@@ -605,11 +570,9 @@ const testingDoctor = ref({})
 const testingImageAPI = ref(false)
 const testingSiliconFlow = ref(false)
 const testingModelscope = ref(false)
-const testingEmbedding = ref(false)
 const testImage = ref(null)
 const exportSelection = ref([])
 const testResult = ref(null)
-const embeddingTestResult = ref(null)
 
 // ModelScope 专用
 const modelscopeModelOptions = ref([])
@@ -627,7 +590,6 @@ watch(
         ...JSON.parse(JSON.stringify(global.imageRecognition || {}))
       }
       localPresetPrompts.value = JSON.parse(JSON.stringify(global.presetPrompts || []))
-      localEmbedding.value = JSON.parse(JSON.stringify(knowledgeStore.embeddingConfig || { model: 'text-embedding-v3', apiKey: '', baseUrl: '' }))
       selectedPreset.value = {}
       modelOptions.value = {}
       loadingModel.value = {}
@@ -637,11 +599,9 @@ watch(
       testingImageAPI.value = false
       testingSiliconFlow.value = false
       testingModelscope.value = false
-      testingEmbedding.value = false
       testImage.value = null
       exportSelection.value = []
       testResult.value = null
-      embeddingTestResult.value = null
       modelscopeModelOptions.value = []
       calcStorage()
     }
@@ -897,28 +857,6 @@ async function testImageAPI() {
   }
 }
 
-// --- Embedding 测试 ---
-async function testEmbedding() {
-  if (!localEmbedding.value.apiKey) { message.warning('请先填写 API Key'); return }
-  testingEmbedding.value = true
-  embeddingTestResult.value = null
-  try {
-    await embedWithModelScope({
-      apiKey: localEmbedding.value.apiKey,
-      baseUrl: localEmbedding.value.baseUrl,
-      model: localEmbedding.value.model || 'text-embedding-v3',
-      input: '测试'
-    })
-    embeddingTestResult.value = { type: 'success', message: 'Embedding 服务连接正常' }
-    message.success('Embedding 连接成功')
-  } catch (e) {
-    embeddingTestResult.value = { type: 'error', message: e?.message || '连接失败' }
-    message.error(`Embedding 连接失败：${e?.message || e}`)
-  } finally {
-    testingEmbedding.value = false
-  }
-}
-
 // --- 导入导出 ---
 function handleExport() {
   if (exportSelection.value.length === 0) { message.warning('请至少选择一项'); return }
@@ -963,7 +901,6 @@ function onSave() {
   global.setDoctors(localDoctors.value)
   global.setPresetPrompts(localPresetPrompts.value)
   global.setImageRecognition(localImageRecognition.value)
-  knowledgeStore.setEmbeddingConfig(localEmbedding.value)
   store.setSettings(localSettings.value)
   calcStorage()
   message.success('已保存全局设置')

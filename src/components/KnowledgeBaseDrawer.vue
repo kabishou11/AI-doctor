@@ -113,6 +113,12 @@
           <a-button block @click="showUploadModal = true">
             <UploadOutlined /> 上传文档
           </a-button>
+          <a-button block @click="batchVectorizeAll" :loading="batchVectorizing" :disabled="!hasUnvectorizedDocs">
+            <AimOutlined /> 一键向量化全部
+          </a-button>
+          <a-button block @click="openConfigModal">
+            <SettingOutlined /> 检索与向量配置
+          </a-button>
         </div>
       </div>
 
@@ -261,6 +267,7 @@
       v-model:open="showUploadModal"
       title="上传文档"
       :footer="null"
+      @cancel="showUploadModal = false; uploadCollectionId = ''; uploadAutoVectorize = true; uploadTags = []"
     >
       <a-upload-dragger
         :before-upload="handleFileUpload"
@@ -302,7 +309,7 @@
       @ok="loadSelectedPresets"
       @cancel="showPresetModal = false"
       :confirm-loading="loadingPreset"
-      :ok-text="selectedPresets.length > 0 ? `加载 ${selectedPresets.length} 个集合` : '加载全部'"
+      :ok-text="selectedPresets.length > 0 ? `加载 ${selectedPresets.length} 个集合` : '一键加载全部（5个集合/15篇）'"
     >
       <div class="preset-wrapper">
         <a-alert type="info" show-icon message="预设医学知识库" description="勾选要加载的集合，点击确定导入。已加载的集合不会重复导入。" style="margin-bottom: 16px;" />
@@ -315,6 +322,105 @@
           <a-tag size="small">{{ getPresetDocCount(col.id) }} 篇</a-tag>
         </div>
       </div>
+    </a-modal>
+
+    <!-- 检索与向量配置弹窗 -->
+    <a-modal
+      v-model:open="showConfigModal"
+      title="检索与向量配置"
+      :width="560"
+      @ok="saveConfig"
+      @cancel="showConfigModal = false"
+      :ok-text="'保存配置'"
+    >
+      <a-tabs default-active-key="retrieval">
+        <a-tab-pane key="retrieval" tab="检索策略">
+          <a-form layout="vertical" :label-col="{ span: 8 }">
+            <a-form-item label="检索策略">
+              <a-select v-model:value="configForm.strategy">
+                <a-select-option value="hybrid">混合检索（Hybrid）</a-select-option>
+                <a-select-option value="keyword">仅关键词（BM25）</a-select-option>
+                <a-select-option value="vector">仅语义向量</a-select-option>
+              </a-select>
+            </a-form-item>
+            <a-form-item label="返回数量">
+              <a-input-number v-model:value="configForm.topK" :min="1" :max="20" style="width: 100%;" />
+              <div class="field-hint">每次检索返回的知识片段数量</div>
+            </a-form-item>
+            <a-form-item label="关键词权重" v-if="configForm.strategy === 'hybrid'">
+              <a-slider v-model:value="configForm.keywordWeight" :min="0" :max="1" :step="0.1" :marks="{ 0: '0', 0.5: '0.5', 1: '1' }" />
+              <div class="field-hint">BM25 关键词命中在混合得分中的权重</div>
+            </a-form-item>
+            <a-form-item label="语义权重" v-if="configForm.strategy === 'hybrid'">
+              <a-slider v-model:value="configForm.vectorWeight" :min="0" :max="1" :step="0.1" :marks="{ 0: '0', 0.5: '0.5', 1: '1' }" />
+              <div class="field-hint">向量相似度在混合得分中的权重</div>
+            </a-form-item>
+            <a-divider>BM25 参数</a-divider>
+            <a-form-item label="启用 BM25">
+              <a-switch v-model:checked="configForm.bm25Enabled" />
+            </a-form-item>
+            <a-form-item label="BM25 k1">
+              <a-input-number v-model:value="configForm.bm25K1" :min="0.5" :max="3" :step="0.1" style="width: 100%;" />
+              <div class="field-hint">词频饱和参数（默认 1.5）</div>
+            </a-form-item>
+            <a-form-item label="BM25 b">
+              <a-input-number v-model:value="configForm.bm25B" :min="0" :max="1" :step="0.05" style="width: 100%;" />
+              <div class="field-hint">文档长度归一化参数（默认 0.75）</div>
+            </a-form-item>
+            <a-divider>高级选项</a-divider>
+            <a-form-item label="启用去重">
+              <a-switch v-model:checked="configForm.enableDeduplication" />
+              <div class="field-hint">同一文档多个切片仅保留最相关的一个</div>
+            </a-form-item>
+            <a-form-item label="启用重排序">
+              <a-switch v-model:checked="configForm.rerankEnabled" />
+            </a-form-item>
+            <a-form-item label="重排序数量" v-if="configForm.rerankEnabled">
+              <a-input-number v-model:value="configForm.rerankTopN" :min="1" :max="10" style="width: 100%;" />
+              <div class="field-hint">重排序后取前 N 个结果</div>
+            </a-form-item>
+          </a-form>
+        </a-tab-pane>
+        <a-tab-pane key="embedding" tab="向量配置">
+          <a-form layout="vertical" :label-col="{ span: 8 }">
+            <a-form-item label="向量服务">
+              <a-select v-model:value="configForm.provider" :options="embeddingProviderOptions" />
+            </a-form-item>
+            <a-form-item label="向量模型">
+              <a-select
+                v-model:value="configForm.model"
+                show-search
+                allow-create
+                :options="embeddingModelOptions"
+                placeholder="选择或输入模型名称"
+                style="width: 100%;"
+              />
+            </a-form-item>
+            <a-form-item label="API Key">
+              <a-input-password v-model:value="configForm.apiKey" placeholder="输入 API Key（可选）" />
+            </a-form-item>
+            <a-form-item label="Base URL">
+              <a-input v-model:value="configForm.baseUrl" :placeholder="configForm.provider === 'modelscope' ? 'https://api-inference.modelscope.cn/v1（留空使用默认）' : 'https://api.openai.com/v1（留空使用默认）'" />
+            </a-form-item>
+            <a-divider>分块策略</a-divider>
+            <a-form-item label="分块方式">
+              <a-select v-model:value="configForm.chunkStrategy">
+                <a-select-option value="sentence">按句子（推荐）</a-select-option>
+                <a-select-option value="paragraph">按段落</a-select-option>
+                <a-select-option value="fixed">固定长度</a-select-option>
+              </a-select>
+            </a-form-item>
+            <a-form-item label="块大小">
+              <a-input-number v-model:value="configForm.chunkSize" :min="100" :max="2000" :step="50" style="width: 100%;" />
+              <div class="field-hint">每个向量切片的最大字符数（默认 800）</div>
+            </a-form-item>
+            <a-form-item label="重叠字符">
+              <a-input-number v-model:value="configForm.chunkOverlap" :min="0" :max="500" :step="10" style="width: 100%;" />
+              <div class="field-hint">相邻块之间的重叠字符数（默认 100）</div>
+            </a-form-item>
+          </a-form>
+        </a-tab-pane>
+      </a-tabs>
     </a-modal>
   </a-drawer>
 </template>
@@ -339,13 +445,34 @@ import {
   UploadOutlined,
   MoreOutlined,
   InboxOutlined,
-  BookOutlined
+  BookOutlined,
+  SettingOutlined
 } from '@ant-design/icons-vue'
 import { useKnowledgeStore } from '../store/knowledge'
 import { parseFileToText } from '../utils/textParser'
 
 const props = defineProps({ open: { type: Boolean, default: false } })
 const emit = defineEmits(['update:open'])
+const open = ref(props.open)
+
+watch(() => props.open, (v) => {
+  open.value = v
+  if (v) {
+    syncConfig()
+  } else {
+    // Reset local state when drawer closes
+    searchQuery.value = ''
+    filterTags.value = []
+    selectedDocId.value = ''
+    editingDoc.value = null
+    editingTags.value = []
+    showUploadModal.value = false
+    uploadCollectionId.value = ''
+    uploadAutoVectorize.value = true
+    uploadTags.value = []
+  }
+})
+watch(open, (v) => emit('update:open', v))
 
 const store = useKnowledgeStore()
 
@@ -411,36 +538,174 @@ const uploadCollectionId = ref('')
 const uploadAutoVectorize = ref(true)
 const uploadTags = ref([])
 
-// 配置 - 从 store 同步
+// 一键向量化
+const batchVectorizing = ref(false)
+const hasUnvectorizedDocs = computed(() => {
+  const vectorizedDocIds = new Set(store.chunks.map(c => c.docId))
+  return store.docs.some(d => d.content && !vectorizedDocIds.has(d.id))
+})
+
+async function batchVectorizeAll() {
+  if (batchVectorizing.value) return
+  const unvectorized = store.docs.filter(d => {
+    const hasVectors = store.chunks.some(c => c.docId === d.id)
+    return d.content && !hasVectors
+  })
+  if (!unvectorized.length) {
+    message.info('所有文档均已向量化，无需重复处理')
+    return
+  }
+  batchVectorizing.value = true
+  try {
+    store.setEmbeddingConfig({
+      provider: embeddingConfig.provider,
+      model: embeddingConfig.model,
+      apiKey: embeddingConfig.apiKey,
+      baseUrl: embeddingConfig.baseUrl,
+      chunkStrategy: embeddingConfig.chunkStrategy,
+      chunkSize: embeddingConfig.chunkSize,
+      chunkOverlap: embeddingConfig.chunkOverlap
+    })
+    let success = 0
+    for (const doc of unvectorized) {
+      try {
+        await store.reembedDoc(doc.id)
+        success++
+      } catch (e) {
+        console.error(`向量化失败: ${doc.title}`, e)
+      }
+    }
+    message.success(`已完成 ${success}/${unvectorized.length} 个文档的向量化`)
+  } catch (e) {
+    message.error(e?.message || '批量向量化失败')
+  } finally {
+    batchVectorizing.value = false
+  }
+}
+
+// 向量化配置（用于单文档操作和批量向量化）
 const embeddingConfig = reactive({
   provider: 'modelscope',
   model: 'text-embedding-v3',
   apiKey: '',
-  baseUrl: '',
+  baseUrl: 'https://api-inference.modelscope.cn/v1',
   chunkStrategy: 'sentence',
   chunkSize: 800,
   chunkOverlap: 100
 })
 
-// 集合
-const collections = computed(() => store.collections)
-
-onMounted(() => {
-  // Load collections from store
-  syncConfig()
-})
-
 function syncConfig() {
-  // Sync embedding config from global settings
   const ec = store.embeddingConfig || {}
   embeddingConfig.provider = ec.provider || 'modelscope'
   embeddingConfig.model = ec.model || 'text-embedding-v3'
   embeddingConfig.apiKey = ec.apiKey || ''
-  embeddingConfig.baseUrl = ec.baseUrl || ''
+  embeddingConfig.baseUrl = ec.baseUrl || 'https://api-inference.modelscope.cn/v1'
   embeddingConfig.chunkStrategy = ec.chunkStrategy || 'sentence'
   embeddingConfig.chunkSize = ec.chunkSize || 800
   embeddingConfig.chunkOverlap = ec.chunkOverlap || 100
 }
+
+// 检索与向量配置弹窗
+const showConfigModal = ref(false)
+const configForm = reactive({
+  strategy: 'hybrid',
+  topK: 5,
+  keywordWeight: 0.5,
+  vectorWeight: 0.5,
+  bm25Enabled: true,
+  bm25K1: 1.5,
+  bm25B: 0.75,
+  rerankEnabled: false,
+  rerankTopN: 3,
+  enableDeduplication: true,
+  chunkStrategy: 'sentence',
+  chunkSize: 800,
+  chunkOverlap: 100,
+  provider: 'modelscope',
+  model: 'text-embedding-v3',
+  apiKey: '',
+  baseUrl: 'https://api-inference.modelscope.cn/v1'
+})
+
+const embeddingProviderOptions = [
+  { label: '魔搭社区（DashScope）', value: 'modelscope' },
+  { label: 'OpenAI / 兼容接口', value: 'openai' }
+]
+
+const embeddingModelOptions = computed(() => {
+  if (configForm.provider === 'modelscope') {
+    return [
+      { label: 'Qwen/Qwen3-Embedding-8B', value: 'Qwen/Qwen3-Embedding-8B' },
+      { label: 'Qwen/Qwen3-Embedding-4B', value: 'Qwen/Qwen3-Embedding-4B' },
+      { label: 'text-embedding-v3（默认）', value: 'text-embedding-v3' },
+      { label: 'text-embedding-3-small', value: 'text-embedding-3-small' },
+      { label: 'text-embedding-3-large', value: 'text-embedding-3-large' }
+    ]
+  } else {
+    return [
+      { label: 'text-embedding-3-small', value: 'text-embedding-3-small' },
+      { label: 'text-embedding-3-large', value: 'text-embedding-3-large' },
+      { label: 'text-embedding-ada-002（兼容）', value: 'text-embedding-ada-002' }
+    ]
+  }
+})
+
+function openConfigModal() {
+  const ec = store.embeddingConfig || {}
+  const rc = store.retrievalConfig || {}
+  configForm.strategy = rc.strategy || 'hybrid'
+  configForm.topK = rc.topK ?? 5
+  configForm.keywordWeight = rc.keywordWeight ?? 0.5
+  configForm.vectorWeight = rc.vectorWeight ?? 0.5
+  configForm.bm25Enabled = rc.bm25Enabled ?? true
+  configForm.bm25K1 = rc.bm25K1 ?? 1.5
+  configForm.bm25B = rc.bm25B ?? 0.75
+  configForm.rerankEnabled = rc.rerankEnabled ?? false
+  configForm.rerankTopN = rc.rerankTopN ?? 3
+  configForm.enableDeduplication = rc.enableDeduplication ?? true
+  configForm.chunkStrategy = ec.chunkStrategy || 'sentence'
+  configForm.chunkSize = ec.chunkSize || 800
+  configForm.chunkOverlap = ec.chunkOverlap || 100
+  configForm.provider = ec.provider || 'modelscope'
+  configForm.model = ec.model || 'text-embedding-v3'
+  configForm.apiKey = ec.apiKey || ''
+  configForm.baseUrl = ec.baseUrl || 'https://api-inference.modelscope.cn/v1'
+  showConfigModal.value = true
+}
+
+function saveConfig() {
+  store.setRetrievalConfig({
+    strategy: configForm.strategy,
+    topK: configForm.topK,
+    keywordWeight: configForm.keywordWeight,
+    vectorWeight: configForm.vectorWeight,
+    bm25Enabled: configForm.bm25Enabled,
+    bm25K1: configForm.bm25K1,
+    bm25B: configForm.bm25B,
+    rerankEnabled: configForm.rerankEnabled,
+    rerankTopN: configForm.rerankTopN,
+    enableDeduplication: configForm.enableDeduplication
+  })
+  store.setEmbeddingConfig({
+    provider: configForm.provider,
+    model: configForm.model,
+    apiKey: configForm.apiKey,
+    baseUrl: configForm.baseUrl,
+    chunkStrategy: configForm.chunkStrategy,
+    chunkSize: configForm.chunkSize,
+    chunkOverlap: configForm.chunkOverlap
+  })
+  syncConfig()
+  showConfigModal.value = false
+  message.success('配置已保存')
+}
+
+// 集合
+const collections = computed(() => store.collections)
+
+onMounted(() => {
+  syncConfig()
+})
 
 function selectCollection(id) {
   selectedCollectionId.value = id
@@ -707,15 +972,16 @@ function getPresetDocCount(colId) {
 }
 
 async function loadSelectedPresets() {
-  if (selectedPresets.value.length === 0) {
-    message.warning('请先勾选要加载的知识库集合')
-    return
-  }
+  // 如果没有勾选任何集合，默认加载全部 5 个集合
+  const toLoad = selectedPresets.value.length > 0
+    ? selectedPresets.value
+    : PRESET_COLLECTIONS.map(c => c.id)
+
   loadingPreset.value = true
   try {
     let colsAdded = 0
     let docsAdded = 0
-    for (const colId of selectedPresets.value) {
+    for (const colId of toLoad) {
       const col = PRESET_COLLECTIONS.find(c => c.id === colId)
       if (col && !store.collections.find(c => c.id === col.id)) {
         store.addCollection({ name: col.name, color: col.color })
@@ -738,7 +1004,7 @@ async function loadSelectedPresets() {
     }
     // mark as initialized so future calls don't double-add
     localStorage.setItem('kb_preset_initialized_v2', 'true')
-    message.success(`已加载 ${colsAdded} 个集合，${docsAdded} 篇文档`)
+    message.success(`已加载 ${colsAdded} 个集合，${docsAdded} 篇文档（${toLoad.length} 个预设集合）`)
     showPresetModal.value = false
     selectedPresets.value = []
   } catch (e) {
@@ -1090,5 +1356,13 @@ watch(() => props.open, (v) => {
   font-size: 12px;
   color: #8c8c8c;
   margin-top: 4px;
+}
+
+/* Config form hints */
+.field-hint {
+  font-size: 12px;
+  color: #8c8c8c;
+  margin-top: 4px;
+  line-height: 1.4;
 }
 </style>
