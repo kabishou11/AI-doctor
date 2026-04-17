@@ -36,7 +36,7 @@
 
 ## 项目简介
 
-AstraCare 临床智研台是一套多医生协同 AI 会诊面板系统，支持多家大模型（重点集成魔搭社区/ModelScope），提供多轮讨论、投票淘汰、知识库检索、影像识别、最终总结等功能。
+AstraCare 临床智研台是一套多医生协同 AI 会诊面板系统，支持多家大模型（重点集成魔搭社区/ModelScope，并将图片识别统一收口到该供应商），提供多轮讨论、投票淘汰、知识库检索、影像识别、最终总结等功能。
 
 本项目旨在为医疗场景提供一个**可演示、可研究、可扩展**的 AI 辅助会诊界面原型，帮助开发者快速构建类似应用。
 
@@ -53,11 +53,11 @@ AstraCare 临床智研台是一套多医生协同 AI 会诊面板系统，支持
 
 | 特性 | 描述 |
 |------|------|
-| **多 LLM 集成** | 支持 OpenAI、Anthropic、Google Gemini、SiliconFlow、魔搭社区，可按医生维度配置不同模型 |
+| **多 LLM 集成** | 支持 OpenAI、Anthropic、Google Gemini、魔搭社区，可按医生维度配置不同模型 |
 | **多医生协作** | 可添加多名"医生"角色，轮流发言、自动评估、投票淘汰 |
 | **工作流可视化** | 讨论、评估、结束等阶段在状态面板实时呈现，支持暂停/恢复 |
 | **知识库检索** | 内置向量库，支持 txt/md/pdf/docx/csv 文档，混合检索（关键词+向量权重） |
-| **图像识别** | 支持魔搭社区/硅基流动模型，识别结果自动注入病历 |
+| **图像识别** | 图片识别仅支持魔搭社区 / ModelScope，识别结果自动注入病历与会诊 |
 | **投票淘汰系统** | 自动解析投票 JSON，标记"不太准确"的医生并淘汰 |
 | **会话管理** | 会话本地存档与切换，支持导出多种格式 |
 | **HarmonyOS 移植** | 提供 ArkTS/ArkUI 原生应用版本 |
@@ -357,7 +357,6 @@ const PROVIDERS = {
   openai: { baseUrl: 'https://api.openai.com/v1' },
   anthropic: { baseUrl: 'https://api.anthropic.com/v1' },
   gemini: { baseUrl: 'https://generativelanguage.googleapis.com/v1' },
-  siliconflow: { baseUrl: 'https://api.siliconflow.com/v1' },
   modelscope: { baseUrl: 'https://api-inference.modelscope.cn/v1' }
 }
 ```
@@ -397,10 +396,9 @@ const PROVIDERS = {
 ### 5. 图像识别
 
 ```javascript
-// 支持的图像识别供应商
+// 图片识别仅支持 ModelScope
 const IMAGE_PROVIDERS = {
-  modelscope: { baseUrl: 'https://api-inference.modelscope.cn/v1' },
-  siliconflow: { baseUrl: 'https://api.siliconflow.com/v1' }
+  modelscope: { baseUrl: 'https://api-inference.modelscope.cn/v1' }
 }
 ```
 
@@ -487,18 +485,16 @@ const EMBEDDING_MODELS = {
 ### 使用流程
 
 1. 进入「图片识别设置」
-2. 选择供应商和模型
-3. 填入 API Key
-4. 上传图片或输入 URL
-5. 点击「开始识别」
-6. 识别结果自动注入病例
+2. 启用并配置 ModelScope 的 API Key、Base URL 和模型
+3. 上传图片或输入 URL
+4. 点击「开始识别」
+5. 识别结果自动注入病例
 
 ### 推荐模型
 
 | 供应商 | 模型 | 特点 |
 |--------|------|------|
-| 魔搭 | Qwen/Qwen3-VL-235B-A22B-Instruct | 多模态能力强 |
-| 硅基流动 | Qwen-VL-Max | 性价比高 |
+| 魔搭 | Qwen/Qwen3-VL-235B-A22B-Instruct | 多模态能力强，适合作为唯一图片识别供应商 |
 
 ---
 
@@ -553,7 +549,7 @@ const EMBEDDING_MODELS = {
 1. 打开浏览器开发者工具（F12）
 2. 查看 Console 错误信息
 3. 切换到 Network 标签查看 API 请求
-4. 在「全局设置」中使用「测试调用」功能
+4. 在「全局设置」中使用「测试连接」和「测试图像识别」功能
 
 
 1. **Bug 反馈**：通过 Issue 报告问题
