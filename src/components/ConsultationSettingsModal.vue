@@ -518,7 +518,6 @@ const providerOptionsMap = computed(() => {
     { label: 'OpenAI规范', value: 'openai' },
     { label: 'Anthropic规范', value: 'anthropic' },
     { label: 'Gemini规范', value: 'gemini' },
-    { label: '硅基流动', value: 'siliconflow' },
     { label: '魔搭社区', value: 'modelscope' }
   ]
   options.forEach((item) => { map[item.value] = item.label })
@@ -949,7 +948,12 @@ function doSave() {
   try {
     store.setConsultationName(localConsultationName.value)
     store.setSettings(localSettings.value)
-    store.setDoctors(consultDoctors.value)
+    store.setDoctors(
+      consultDoctors.value.map((doctor) => ({
+        ...doctor,
+        provider: doctor.provider === 'siliconflow' ? 'modelscope' : doctor.provider
+      }))
+    )
     store.setLinkedConsultations(linkedConsultations.value)
     store.setSelectedKnowledge(selectedKnowledgeIds.value)
     if (localConsultationName.value.trim() && sessions.currentId) {

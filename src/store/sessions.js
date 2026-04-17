@@ -23,6 +23,10 @@ function statusText(phase) {
 const META_KEY = 'consult_sessions_meta'
 const CURRENT_KEY = 'consult_sessions_current'
 
+function normalizeDoctorProvider(provider) {
+  return provider === 'siliconflow' ? 'modelscope' : provider
+}
+
 function loadMeta() {
   try {
     const raw = localStorage.getItem(META_KEY)
@@ -46,6 +50,7 @@ function saveCurrentId(id) {
 function sanitizeConsultDoctors(list) {
   return (list || []).map((d) => ({
     ...d,
+    provider: normalizeDoctorProvider(d?.provider),
     status: d?.status || 'active',
     votes: typeof d?.votes === 'number' ? d.votes : 0
   }))
@@ -74,7 +79,7 @@ function saveData(id, data) {
 
 export const useSessionsStore = defineStore('sessions', {
   state: () => ({
-    sessions: [], // [{id, name, status, createdAt, updatedAt}]
+    sessions: [],
     currentId: ''
   }),
   getters: {

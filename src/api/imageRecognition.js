@@ -30,38 +30,27 @@ function extractTextFromChoice(choice) {
   return ""
 }
 
-export async function recognizeImageWithSiliconFlow(options) {
-  const key = options?.apiKey || ""
-  // 如果误选了硅基流动但填的是魔搭/阿里系 key，则自动按魔搭路由，避免 401
-  const provider = key.startsWith("ms-") || key.startsWith("sk-") ? "modelscope" : "siliconflow"
-  return recognizeImage(options, { endpoints: buildEndpointList(options, provider) })
-}
-
 export async function recognizeImageWithModelScope(options) {
-  return recognizeImage(options, { endpoints: buildEndpointList(options, "modelscope") })
+  return recognizeImage(options, { endpoints: buildModelScopeEndpointList(options) })
 }
 
-function buildEndpointList(options, provider) {
+function buildModelScopeEndpointList(options) {
   const { apiKey, baseUrl } = options || {}
   const list = []
   if (baseUrl && baseUrl.trim()) list.push(normalizeBaseUrl(baseUrl, baseUrl))
-  if (provider === "siliconflow") {
-    list.push("https://api.siliconflow.cn")
-  } else if (provider === "modelscope") {
-    if (apiKey?.startsWith("ms-")) {
-      list.push("https://api-inference.modelscope.cn")
-    } else if (apiKey?.startsWith("sk-")) {
-      list.push("https://dashscope.aliyuncs.com/compatible-mode")
-    } else {
-      list.push("https://api-inference.modelscope.cn", "https://dashscope.aliyuncs.com/compatible-mode")
-    }
+  if (apiKey?.startsWith("ms-")) {
+    list.push("https://api-inference.modelscope.cn")
+  } else if (apiKey?.startsWith("sk-")) {
+    list.push("https://dashscope.aliyuncs.com/compatible-mode")
+  } else {
+    list.push("https://api-inference.modelscope.cn", "https://dashscope.aliyuncs.com/compatible-mode")
   }
   return Array.from(new Set(list.filter(Boolean)))
 }
 
 async function recognizeImage({ apiKey, model, prompt, imageBase64, imageUrl }, { endpoints }) {
-  if (!apiKey) throw new Error("未配置图像识别 API Key")
-  if (!model) throw new Error("请选择图像识别模型")
+  if (!apiKey) throw new Error("未配置 ModelScope 图像识别 API Key")
+  if (!model) throw new Error("请选择 ModelScope 图像识别模型")
   if (!imageBase64 && !imageUrl) throw new Error("请提供要识别的图片")
 
   const errors = []
@@ -126,5 +115,5 @@ async function recognizeImage({ apiKey, model, prompt, imageBase64, imageUrl }, 
       errors.push(`endpoint ${root}: ${status || ""} ${body ? JSON.stringify(body) : err?.message || err}`)
     }
   }
-  throw new Error(errors.join(" | ") || "图像识别调用失败")
+  throw new Error(errors.join(" | ") || "ModelScope 图像识别调用失败")
 }
