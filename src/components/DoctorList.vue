@@ -16,7 +16,6 @@ const providerLabelMap = {
   openai: 'OpenAI规范',
   anthropic: 'Anthropic规范',
   gemini: 'Gemini规范',
-  siliconflow: '硅基流动',
   modelscope: '魔搭社区'
 }
 

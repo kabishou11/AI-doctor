@@ -19,8 +19,6 @@ export async function listModels(provider, apiKey, baseUrl) {
       return toOptions(await listAnthropicModels(apiKey, baseUrl))
     case 'gemini':
       return toOptions(await listGeminiModels(apiKey, baseUrl))
-    case 'siliconflow':
-      return toOptions(await listSiliconFlowModels(apiKey, baseUrl))
     case 'modelscope':
       return toOptions(await listModelScopeModels(apiKey, baseUrl))
     default:
@@ -59,7 +57,6 @@ export async function listAnthropicModels(apiKey, baseUrl) {
 export async function listGeminiModels(apiKey, baseUrl) {
   const root = normalizeBaseUrl(baseUrl, 'https://generativelanguage.googleapis.com')
   const isGoogle = /generativelanguage\.googleapis\.com$/.test(root)
-  // Gemini supports v1 and v1beta. Try v1 first then fallback to v1beta.
   const tryPaths = [`${root}/v1/models`, `${root}/v1beta/models`]
   let models = []
   for (const p of tryPaths) {
@@ -76,22 +73,6 @@ export async function listGeminiModels(apiKey, baseUrl) {
   return models.sort((a, b) => a.id.localeCompare(b.id))
 }
 
-export async function listSiliconFlowModels(apiKey, baseUrl) {
-  const root = normalizeBaseUrl(baseUrl, 'https://api.siliconflow.cn')
-  const url = wrapUrlForDev(`${root}/v1/models`)
-  const res = await axios.get(url, {
-    headers: { Authorization: `Bearer ${apiKey}` }
-  })
-  const data = res.data?.data || res.data?.models || []
-  return data
-    .map((m) => ({
-      id: m.id || m.name,
-      displayName: m.display_name || m.owned_by || m.provider || undefined
-    }))
-    .filter((m) => !!m.id)
-    .sort((a, b) => a.id.localeCompare(b.id))
-}
-
 export async function listModelScopeModels(apiKey, baseUrl) {
   const endpoints = []
   if (baseUrl && baseUrl.trim()) {
@@ -105,7 +86,7 @@ export async function listModelScopeModels(apiKey, baseUrl) {
   const headers = { Authorization: `Bearer ${apiKey}` }
   const errors = []
   for (const root of uniq) {
-    const url = root.includes('compatible-mode') ? `${normalizeBaseUrl(root, root)}/models` : `${normalizeBaseUrl(root, root)}/models`
+    const url = `${normalizeBaseUrl(root, root)}/models`
     try {
       const finalUrl = wrapUrlForDev(url)
       const res = await axios.get(finalUrl, { headers })
@@ -123,6 +104,6 @@ export async function listModelScopeModels(apiKey, baseUrl) {
       errors.push(`endpoint ${root}: ${status || ''} ${body ? JSON.stringify(body) : err?.message || err}`)
     }
   }
-  const msg = errors.length ? errors.join(' | ') : '加载模型失败'
+  const msg = errors.length ? errors.join(' | ') : '加载 ModelScope 模型失败'
   throw new Error(msg)
 }

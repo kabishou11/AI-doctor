@@ -8,9 +8,9 @@
             当前阶段：{{ store.workflow.phase === 'discussion' ? '讨论中' : (store.workflow.phase === 'voting' ? '评估中' : (store.workflow.phase === 'finished' ? '已结束' : store.workflow.phase)) }}
           </div>
           <div>
-            <a-button 
-              size="small" 
-              v-if="store.workflow.phase === 'discussion'" 
+            <a-button
+              size="small"
+              v-if="store.workflow.phase === 'discussion'"
               @click="togglePause"
               :type="store.workflow.paused ? 'primary' : 'default'"
               :danger="!store.workflow.paused"
@@ -22,7 +22,7 @@
         </div>
       </div>
       <!-- Pause Banner -->
-      <a-alert 
+      <a-alert
         v-if="store.workflow.phase === 'discussion' && store.workflow.paused"
         type="warning"
         show-icon
@@ -78,7 +78,7 @@ import { useConsultStore } from '../store'
 import { useGlobalStore } from '../store/global'
 import CaseInputForm from './CaseInputForm.vue'
 import ChatDisplay from './ChatDisplay.vue'
-import { recognizeImageWithSiliconFlow, recognizeImageWithModelScope } from '../api/imageRecognition'
+import { recognizeImageWithModelScope } from '../api/imageRecognition'
 
 const store = useConsultStore()
 const global = useGlobalStore()
@@ -88,7 +88,6 @@ const isRecognizingImage = ref(false)
 const canInput = computed(() => store.workflow.phase !== 'setup')
 const imageRecognitionConfig = computed(() => global.imageRecognition || {})
 const imageRecognitionEnabled = computed(() => !!imageRecognitionConfig.value?.enabled)
-const imageProvider = computed(() => imageRecognitionConfig.value?.provider || 'siliconflow')
 
 function togglePause() {
   store.togglePause()
@@ -125,10 +124,10 @@ async function handleImageUpload(file) {
   }
 
   isRecognizingImage.value = true
-  
+
   try {
     const base64 = await toBase64(file)
-    
+
     const payload = {
       apiKey: imageRecognitionConfig.value.apiKey,
       baseUrl: imageRecognitionConfig.value.baseUrl,
@@ -136,10 +135,7 @@ async function handleImageUpload(file) {
       prompt: imageRecognitionConfig.value.prompt,
       imageBase64: base64.raw
     }
-    const result =
-      imageProvider.value === 'modelscope'
-        ? await recognizeImageWithModelScope(payload)
-        : await recognizeImageWithSiliconFlow(payload)
+    const result = await recognizeImageWithModelScope(payload)
 
     const trimmed = (result || '').trim()
 
@@ -151,12 +147,12 @@ async function handleImageUpload(file) {
       message.warning('图片识别未返回内容')
     }
   } catch (err) {
-    const errorMessage = err?.message || '图片识别失败，请检查配置'
+    const errorMessage = err?.message || '图片识别失败，请检查 ModelScope 配置'
     message.error(errorMessage)
   } finally {
     isRecognizingImage.value = false
   }
-  
+
   return false
 }
 </script>

@@ -2,12 +2,28 @@ import { defineStore } from 'pinia'
 
 const GLOBAL_DOCTORS_KEY = 'global_doctors_config'
 
+function normalizeDoctorProvider(provider) {
+  return provider === 'siliconflow' ? 'modelscope' : provider
+}
+
+function normalizeDoctorConfig(doctor, fallbackId) {
+  return {
+    id: doctor?.id || fallbackId,
+    name: doctor?.name || '',
+    provider: normalizeDoctorProvider(doctor?.provider || 'openai'),
+    model: doctor?.model || '',
+    apiKey: doctor?.apiKey || '',
+    baseUrl: doctor?.baseUrl || '',
+    customPrompt: doctor?.customPrompt || ''
+  }
+}
+
 function loadGlobalDoctors() {
   try {
     const raw = localStorage.getItem(GLOBAL_DOCTORS_KEY)
     if (raw) {
       const arr = JSON.parse(raw)
-      if (Array.isArray(arr)) return arr
+      if (Array.isArray(arr)) return arr.map((doctor, index) => normalizeDoctorConfig(doctor, `doc-${index + 1}`))
     }
   } catch (e) {}
   // 默认全局医生配置（不包含状态与票数）
@@ -56,26 +72,36 @@ function normalizeMaxConcurrent(value) {
   return 1
 }
 
-function loadImageRecognitionConfig() {
+function normalizeImageRecognitionConfig(config) {
   const defaults = {
     enabled: false,
-    provider: 'siliconflow',
-    model: 'Pro/Qwen/Qwen2-VL-72B-Instruct',
+    provider: 'modelscope',
+    model: '',
     apiKey: '',
     baseUrl: '',
     prompt:
       '识别当前病灶相关的图片内容。请仔细观察图片中的所有细节，用专业医学术语描述图片中的病灶特征、位置、形态、颜色、大小等关键信息。如果图片中没有明显的病灶相关内容或与医疗诊断无关，请明确说明"图片内容与病灶无关"。请使用专业、严谨的语气进行描述。',
     maxConcurrent: 1
   }
+  const normalized = {
+    ...defaults,
+    ...config,
+    provider: 'modelscope',
+    apiKey: config?.modelscopeApiKey || config?.apiKey || defaults.apiKey,
+    baseUrl: config?.modelscopeBaseUrl || config?.baseUrl || defaults.baseUrl,
+    model: config?.modelscopeModel || config?.model || defaults.model,
+    maxConcurrent: normalizeMaxConcurrent(config?.maxConcurrent ?? defaults.maxConcurrent)
+  }
+  return normalized
+}
+
+function loadImageRecognitionConfig() {
+  const defaults = normalizeImageRecognitionConfig()
   try {
     const raw = localStorage.getItem(IMAGE_RECOGNITION_KEY)
     if (raw) {
       const parsed = JSON.parse(raw)
-      return {
-        ...defaults,
-        ...parsed,
-        maxConcurrent: normalizeMaxConcurrent(parsed?.maxConcurrent ?? defaults.maxConcurrent)
-      }
+      return normalizeImageRecognitionConfig(parsed)
     }
   } catch (e) {}
   return defaults
@@ -173,30 +199,12 @@ export const useGlobalStore = defineStore('global', {
   actions: {
     setDoctors(list) {
       // 仅保存必要字段，避免混入 status/votes 等会诊内状态
-      const sanitized = (list || []).map((d) => ({
-        id: d.id,
-        name: d.name,
-        provider: d.provider,
-        model: d.model,
-        apiKey: d.apiKey,
-        baseUrl: d.baseUrl,
-        customPrompt: d.customPrompt
-      }))
+      const sanitized = (list || []).map((d, index) => normalizeDoctorConfig(d, `doc-${index + 1}`))
       this.doctors = sanitized
       saveGlobalDoctors(sanitized)
     },
     setImageRecognition(config) {
-      const payload = {
-        enabled: !!config?.enabled,
-        provider: config?.provider || 'siliconflow',
-        model: config?.model || 'Pro/Qwen/Qwen2-VL-72B-Instruct',
-        apiKey: config?.apiKey || '',
-        baseUrl: config?.baseUrl || '',
-        prompt:
-          config?.prompt ||
-          '识别当前病灶相关的图片内容。请仔细观察图片中的所有细节，用专业医学术语描述图片中的病灶特征、位置、形态、颜色、大小等关键信息。如果图片中没有明显的病灶相关内容或与医疗诊断无关，请明确说明"图片内容与病灶无关"。请使用专业、严谨的语气进行描述。',
-        maxConcurrent: normalizeMaxConcurrent(config?.maxConcurrent ?? 1)
-      }
+      const payload = normalizeImageRecognitionConfig(config)
       this.imageRecognition = payload
       saveImageRecognitionConfig(payload)
     },

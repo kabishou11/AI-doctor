@@ -1,7 +1,7 @@
 import { ref, computed, watch } from 'vue'
 import { useConsultStore } from '../store'
 import { useGlobalStore } from '../store/global'
-import { recognizeImageWithSiliconFlow } from '../api/imageRecognition'
+import { recognizeImageWithModelScope } from '../api/imageRecognition'
 
 function normalizeStatus(status, result, error) {
   if (status === 'recognizing') return 'recognizing'
@@ -170,7 +170,7 @@ export function useImageRecognitionQueue(options = {}) {
 
   async function processSingleImage(imageItem) {
     try {
-      const result = await recognizeImageWithSiliconFlow({
+      const result = await recognizeImageWithModelScope({
         apiKey: imageRecognitionConfig.value.apiKey,
         baseUrl: imageRecognitionConfig.value.baseUrl,
         model: imageRecognitionConfig.value.model,
@@ -186,7 +186,7 @@ export function useImageRecognitionQueue(options = {}) {
       }
     } catch (err) {
       imageItem.status = 'error'
-      imageItem.error = err?.message || '图片识别失败，请检查配置'
+      imageItem.error = err?.message || '图片识别失败，请检查 ModelScope 配置'
       if (typeof onStatusChange === 'function') {
         onStatusChange(imageItem, 'error', { error: imageItem.error, rawError: err })
       }

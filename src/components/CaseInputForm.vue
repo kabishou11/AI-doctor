@@ -150,7 +150,7 @@ const {
     if (status === 'success') {
       message.success('图片识别完成')
     } else if (status === 'error') {
-      message.error(payload.error || image.error || '图片识别失败，请检查配置')
+      message.error(payload.error || image.error || '图片识别失败，请检查 ModelScope 配置')
     }
   }
 })

@@ -27,7 +27,6 @@
           <template #item="{ element, index }">
             <a-card size="small" class="doctor-card" style="margin-bottom: 10px;">
               <div class="doctor-card-header">
-                <!-- 医生颜色标识 -->
                 <div class="doctor-avatar" :style="{ backgroundColor: getDoctorColor(index) }">
                   {{ (element.name || 'D').charAt(0).toUpperCase() }}
                 </div>
@@ -188,26 +187,31 @@
         </div>
 
         <template v-if="localImageRecognition.enabled">
-          <a-alert type="info" show-icon message="配置说明" description="请选择支持图片识别的模型，并填写相应的 API Key。支持硅基流动和魔搭社区。" style="margin-bottom: 12px;" />
+          <a-alert
+            type="info"
+            show-icon
+            message="配置说明"
+            description="图片识别仅支持魔搭社区 / ModelScope。请填写 API Key、Base URL 与多模态模型，并用下方按钮验证配置。"
+            style="margin-bottom: 12px;"
+          />
 
-          <!-- SiliconFlow 配置 -->
           <a-card size="small" class="config-card" style="margin-bottom: 10px;">
             <template #title>
               <a-space>
-                <span>&#9889;</span>
-                <span>硅基流动 SiliconFlow</span>
-                <a-tag v-if="localImageRecognition.provider === 'siliconflow'" color="blue">当前</a-tag>
+                <span>&#128640;</span>
+                <span>魔搭社区 / ModelScope</span>
+                <a-tag color="green">唯一供应商</a-tag>
               </a-space>
             </template>
             <a-row :gutter="[12, 0]">
               <a-col :span="12">
                 <a-form-item label="API Key" size="small">
-                  <a-input-password v-model:value="localImageRecognition.apiKey" placeholder="sk-..." size="small" />
+                  <a-input-password v-model:value="localImageRecognition.apiKey" placeholder="魔搭 API Key" size="small" />
                 </a-form-item>
               </a-col>
               <a-col :span="12">
                 <a-form-item label="自定义 Base URL" size="small">
-                  <a-input v-model:value="localImageRecognition.baseUrl" placeholder="留空使用默认 https://api.siliconflow.cn" size="small" />
+                  <a-input v-model:value="localImageRecognition.baseUrl" placeholder="留空使用默认 ModelScope / DashScope 端点" size="small" />
                 </a-form-item>
               </a-col>
             </a-row>
@@ -221,7 +225,7 @@
                       :options="imageModelOptions"
                       show-search
                       :loading="loadingImageModel"
-                      placeholder="选择模型"
+                      placeholder="选择多模态模型"
                       allow-create
                       :filter-option="false"
                       size="small"
@@ -238,61 +242,17 @@
             </a-row>
           </a-card>
 
-          <!-- ModelScope 配置 -->
-          <a-card size="small" class="config-card" style="margin-bottom: 10px;">
-            <template #title>
-              <a-space>
-                <span>&#128640;</span>
-                <span>魔搭社区 ModelScope</span>
-                <a-tag v-if="localImageRecognition.provider === 'modelscope'" color="green">当前</a-tag>
-              </a-space>
-            </template>
-            <a-row :gutter="[12, 0]">
-              <a-col :span="12">
-                <a-form-item label="API Key" size="small">
-                  <a-input-password v-model:value="localImageRecognition.modelscopeApiKey" placeholder="魔搭 API Key" size="small" />
-                </a-form-item>
-              </a-col>
-              <a-col :span="12">
-                <a-form-item label="自定义 Base URL" size="small">
-                  <a-input v-model:value="localImageRecognition.modelscopeBaseUrl" placeholder="留空使用默认 https://api.modelscope.cn" size="small" />
-                </a-form-item>
-              </a-col>
-            </a-row>
-            <a-row :gutter="[12, 0]">
-              <a-col :span="16">
-                <a-form-item label="模型名称" size="small">
-                  <div class="model-row">
-                    <a-select
-                      style="flex:1"
-                      v-model:value="localImageRecognition.modelscopeModel"
-                      :options="modelscopeModelOptions"
-                      show-search
-                      :loading="loadingModelscopeModel"
-                      placeholder="选择模型"
-                      allow-create
-                      :filter-option="false"
-                      size="small"
-                    />
-                    <a-button :loading="loadingModelscopeModel" size="small" @click="loadModelscopeModels">加载</a-button>
-                  </div>
-                </a-form-item>
-              </a-col>
-            </a-row>
-          </a-card>
-
-          <!-- 统一配置 -->
           <a-card size="small" class="config-card" style="margin-bottom: 10px;">
             <template #title>
               <a-space>
                 <span>&#128172;</span>
-                <span>识别配置</span>
+                <span>识别与验证</span>
               </a-space>
             </template>
             <a-form-item label="图像识别提示词" size="small">
               <a-textarea v-model:value="localImageRecognition.prompt" rows="3" placeholder="描述图像识别的需求..." />
             </a-form-item>
-            <a-form-item label="测试连接" size="small">
+            <a-form-item label="测试图片与验证" size="small">
               <div class="test-row">
                 <a-upload :before-upload="handleTestImageUpload" :show-upload-list="false" accept="image/*">
                   <a-button size="small">
@@ -303,14 +263,11 @@
                   <img :src="testImage.preview" alt="预览" />
                   <a-button type="link" danger size="small" @click="removeTestImage">移除</a-button>
                 </div>
+                <a-button :loading="testingConnection" @click="testModelscopeConnection" size="small">
+                  测试连接
+                </a-button>
                 <a-button type="primary" :loading="testingImageAPI" @click="testImageAPI" size="small">
                   测试图像识别
-                </a-button>
-                <a-button :loading="testingSiliconFlow" @click="testSiliconFlowConnection" size="small">
-                  测试 SiliconFlow 连接
-                </a-button>
-                <a-button :loading="testingModelscope" @click="testModelscopeConnection" size="small">
-                  测试 ModelScope 连接
                 </a-button>
               </div>
               <div v-if="testResult" class="test-result" :class="testResult.type">
@@ -372,7 +329,6 @@
           </a-space>
         </div>
 
-        <!-- 版本信息 -->
         <a-card size="small" class="info-card" style="margin-bottom: 10px;">
           <template #title>
             <a-space><span>&#128196;</span> 版本信息</a-space>
@@ -385,7 +341,6 @@
           </a-descriptions>
         </a-card>
 
-        <!-- 本地存储 -->
         <a-card size="small" class="info-card" style="margin-bottom: 10px;">
           <template #title>
             <a-space><span>&#128190;</span> 本地存储</a-space>
@@ -415,7 +370,6 @@
           </div>
         </a-card>
 
-        <!-- 关于 -->
         <a-card size="small" class="info-card">
           <template #title>
             <a-space><span>&#8505;</span> 关于 AstraCare</a-space>
@@ -428,7 +382,6 @@
       </a-tab-pane>
     </a-tabs>
 
-    <!-- 底部保存按钮 -->
     <div class="modal-footer">
       <a-button @click="open = false">取消</a-button>
       <a-button type="primary" @click="onSave">保存设置</a-button>
@@ -437,14 +390,14 @@
 </template>
 
 <script setup>
-import { ref, watch, computed, h, resolveComponent, nextTick } from 'vue'
+import { ref, watch, computed } from 'vue'
 import draggable from 'vuedraggable'
 import { useConsultStore } from '../store'
 import { useGlobalStore } from '../store/global'
 import { message, Modal } from 'ant-design-vue'
 import { callAI } from '../api/callAI'
 import { listModels } from '../api/models'
-import { recognizeImageWithSiliconFlow } from '../api/imageRecognition'
+import { recognizeImageWithModelScope } from '../api/imageRecognition'
 
 const store = useConsultStore()
 const global = useGlobalStore()
@@ -458,13 +411,11 @@ const activeTab = ref('doctors')
 watch(() => props.open, (v) => (open.value = v))
 watch(open, (v) => emit('update:open', v))
 
-// --- 版本信息 ---
 const appInfo = {
   name: 'AstraCare',
   version: '0.1.0'
 }
 
-// --- 存储信息 ---
 const storageDetails = ref([])
 const storageUsed = ref(0)
 const storageTotalStr = '约 5MB'
@@ -492,7 +443,7 @@ function calcStorage() {
     try {
       const raw = localStorage.getItem(name)
       if (raw) {
-        const bytes = raw.length * 2 // UTF-16
+        const bytes = raw.length * 2
         total += bytes
         details.push({ key, size: bytes < 1024 ? bytes + ' B' : (bytes / 1024).toFixed(1) + ' KB' })
       }
@@ -529,12 +480,10 @@ function clearDocuments() {
   calcStorage()
 }
 
-// --- 医生配置 ---
 const providerOptions = [
   { label: 'OpenAI', value: 'openai' },
   { label: 'Anthropic', value: 'anthropic' },
   { label: 'Gemini', value: 'gemini' },
-  { label: '硅基流动', value: 'siliconflow' },
   { label: '魔搭社区', value: 'modelscope' }
 ]
 
@@ -549,8 +498,10 @@ function getDoctorColor(idx) {
 
 function getProviderColor(provider) {
   const map = {
-    openai: '#10a37f', anthropic: '#d97706', gemini: '#4285f4',
-    siliconflow: '#6f42c1', modelscope: '#11a863'
+    openai: '#10a37f',
+    anthropic: '#d97706',
+    gemini: '#4285f4',
+    modelscope: '#11a863'
   }
   return map[provider] || '#999'
 }
@@ -559,36 +510,60 @@ function getProviderLabel(provider) {
   return providerOptions.find((p) => p.value === provider)?.label || provider
 }
 
+function normalizeDoctorProvider(provider) {
+  return provider === 'siliconflow' ? 'modelscope' : provider
+}
+
+function normalizeDoctorConfig(doctor, index) {
+  return {
+    id: doctor?.id || `doc-${Date.now()}-${index}`,
+    name: doctor?.name || '',
+    provider: normalizeDoctorProvider(doctor?.provider || 'openai'),
+    model: doctor?.model || '',
+    apiKey: doctor?.apiKey || '',
+    baseUrl: doctor?.baseUrl || '',
+    customPrompt: doctor?.customPrompt || ''
+  }
+}
+
+function normalizeImageRecognitionConfig(config) {
+  return {
+    enabled: !!config?.enabled,
+    provider: 'modelscope',
+    apiKey: config?.modelscopeApiKey || config?.apiKey || '',
+    baseUrl: config?.modelscopeBaseUrl || config?.baseUrl || '',
+    model: config?.modelscopeModel || config?.model || '',
+    prompt: config?.prompt || '',
+    maxConcurrent: Number.isFinite(Number(config?.maxConcurrent)) && Number(config?.maxConcurrent) >= 1
+      ? Math.floor(Number(config.maxConcurrent))
+      : 1
+  }
+}
+
 const localDoctors = ref([])
 const localSettings = ref({})
-const localImageRecognition = ref({})
+const localImageRecognition = ref(normalizeImageRecognitionConfig())
 const localPresetPrompts = ref([])
 const selectedPreset = ref({})
 const modelOptions = ref({})
 const loadingModel = ref({})
 const testingDoctor = ref({})
+const imageModelOptions = ref([])
+const loadingImageModel = ref(false)
 const testingImageAPI = ref(false)
-const testingSiliconFlow = ref(false)
-const testingModelscope = ref(false)
+const testingConnection = ref(false)
 const testImage = ref(null)
 const exportSelection = ref([])
 const testResult = ref(null)
-
-// ModelScope 专用
-const modelscopeModelOptions = ref([])
-const loadingModelscopeModel = ref(false)
 
 watch(
   () => props.open,
   (v) => {
     if (v) {
       activeTab.value = 'doctors'
-      localDoctors.value = JSON.parse(JSON.stringify(global.doctors))
+      localDoctors.value = (global.doctors || []).map((doctor, index) => normalizeDoctorConfig(doctor, index))
       localSettings.value = JSON.parse(JSON.stringify(store.settings))
-      localImageRecognition.value = {
-        maxConcurrent: 1,
-        ...JSON.parse(JSON.stringify(global.imageRecognition || {}))
-      }
+      localImageRecognition.value = normalizeImageRecognitionConfig(global.imageRecognition || {})
       localPresetPrompts.value = JSON.parse(JSON.stringify(global.presetPrompts || []))
       selectedPreset.value = {}
       modelOptions.value = {}
@@ -597,12 +572,10 @@ watch(
       imageModelOptions.value = []
       loadingImageModel.value = false
       testingImageAPI.value = false
-      testingSiliconFlow.value = false
-      testingModelscope.value = false
+      testingConnection.value = false
       testImage.value = null
       exportSelection.value = []
       testResult.value = null
-      modelscopeModelOptions.value = []
       calcStorage()
     }
   }
@@ -615,7 +588,6 @@ const presetPromptOptions = computed(() => {
   }))
 })
 
-// --- 医生排序 ---
 function sortDoctors(by) {
   localDoctors.value.sort((a, b) => {
     if (by === 'name') return (a.name || '').localeCompare(b.name || '')
@@ -673,7 +645,6 @@ function removePresetById(id) {
   }
 }
 
-// --- 模型加载与测试 ---
 async function loadModels(element) {
   const id = element.id
   loadingModel.value = { ...loadingModel.value, [id]: true }
@@ -703,22 +674,13 @@ async function testDoctorModel(element) {
   }
 }
 
-// --- 医生导入导出 ---
 function handleDoctorImport(file) {
   const reader = new FileReader()
   reader.onload = (e) => {
     try {
       const data = JSON.parse(e.target.result)
       if (Array.isArray(data)) {
-        const sanitized = data.map((d, i) => ({
-          id: d.id || `doc-import-${Date.now()}-${i}`,
-          name: d.name || '',
-          provider: d.provider || 'openai',
-          model: d.model || '',
-          apiKey: d.apiKey || '',
-          baseUrl: d.baseUrl || '',
-          customPrompt: d.customPrompt || ''
-        }))
+        const sanitized = data.map((doctor, index) => normalizeDoctorConfig(doctor, index))
         localDoctors.value = sanitized
         message.success(`已导入 ${sanitized.length} 个医生配置`)
       } else {
@@ -733,9 +695,13 @@ function handleDoctorImport(file) {
 }
 
 function handleDoctorExport() {
-  const data = localDoctors.value.map((d) => ({
-    name: d.name, provider: d.provider, model: d.model,
-    apiKey: d.apiKey, baseUrl: d.baseUrl, customPrompt: d.customPrompt
+  const data = localDoctors.value.map((doctor) => ({
+    name: doctor.name,
+    provider: doctor.provider,
+    model: doctor.model,
+    apiKey: doctor.apiKey,
+    baseUrl: doctor.baseUrl,
+    customPrompt: doctor.customPrompt
   }))
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
   const url = URL.createObjectURL(blob)
@@ -747,15 +713,11 @@ function handleDoctorExport() {
   message.success('医生配置已导出')
 }
 
-// --- 图片模型 ---
-const imageModelOptions = ref([])
-const loadingImageModel = ref(false)
-
 async function loadImageModels() {
-  if (!localImageRecognition.value.apiKey) { message.warning('请先填写 SiliconFlow API Key'); return }
+  if (!localImageRecognition.value.apiKey) { message.warning('请先填写魔搭 API Key'); return }
   loadingImageModel.value = true
   try {
-    const options = await listModels(localImageRecognition.value.provider, localImageRecognition.value.apiKey, localImageRecognition.value.baseUrl)
+    const options = await listModels('modelscope', localImageRecognition.value.apiKey, localImageRecognition.value.baseUrl)
     imageModelOptions.value = options
     message.success('图像识别模型列表已加载')
   } catch (e) {
@@ -765,50 +727,19 @@ async function loadImageModels() {
   }
 }
 
-async function loadModelscopeModels() {
-  if (!localImageRecognition.value.modelscopeApiKey) { message.warning('请先填写魔搭 API Key'); return }
-  loadingModelscopeModel.value = true
-  try {
-    const options = await listModels('modelscope', localImageRecognition.value.modelscopeApiKey, localImageRecognition.value.modelscopeBaseUrl)
-    modelscopeModelOptions.value = options
-    message.success('魔搭模型列表已加载')
-  } catch (e) {
-    message.error(`加载失败：${e?.message || e}`)
-  } finally {
-    loadingModelscopeModel.value = false
-  }
-}
-
-async function testSiliconFlowConnection() {
-  if (!localImageRecognition.value.apiKey) { message.warning('请先填写 SiliconFlow API Key'); return }
-  testingSiliconFlow.value = true
-  testResult.value = null
-  try {
-    await listModels('siliconflow', localImageRecognition.value.apiKey, localImageRecognition.value.baseUrl)
-    testResult.value = { type: 'success', message: 'SiliconFlow 连接成功，API Key 有效' }
-    message.success('SiliconFlow 连接成功')
-  } catch (e) {
-    testResult.value = { type: 'error', message: e?.message || '连接失败' }
-    message.error(`SiliconFlow 连接失败：${e?.message || e}`)
-  } finally {
-    testingSiliconFlow.value = false
-  }
-}
-
 async function testModelscopeConnection() {
-  const key = localImageRecognition.value.modelscopeApiKey
-  if (!key) { message.warning('请先填写魔搭 API Key'); return }
-  testingModelscope.value = true
+  if (!localImageRecognition.value.apiKey) { message.warning('请先填写魔搭 API Key'); return }
+  testingConnection.value = true
   testResult.value = null
   try {
-    await listModels('modelscope', key, localImageRecognition.value.modelscopeBaseUrl)
+    await listModels('modelscope', localImageRecognition.value.apiKey, localImageRecognition.value.baseUrl)
     testResult.value = { type: 'success', message: 'ModelScope 连接成功，API Key 有效' }
     message.success('ModelScope 连接成功')
   } catch (e) {
     testResult.value = { type: 'error', message: e?.message || '连接失败' }
     message.error(`ModelScope 连接失败：${e?.message || e}`)
   } finally {
-    testingModelscope.value = false
+    testingConnection.value = false
   }
 }
 
@@ -826,21 +757,25 @@ async function handleTestImageUpload(file) {
       message.success(`已选择测试图片：${file.name}`)
     }
     reader.readAsDataURL(file)
-  } catch { message.error('读取图片失败') }
+  } catch {
+    message.error('读取图片失败')
+  }
   return false
 }
 
-function removeTestImage() { testImage.value = null }
+function removeTestImage() {
+  testImage.value = null
+}
 
 async function testImageAPI() {
-  if (!localImageRecognition.value.apiKey) { message.warning('请先填写 API Key'); return }
-  if (!localImageRecognition.value.model) { message.warning('请先选择模型'); return }
+  if (!localImageRecognition.value.apiKey) { message.warning('请先填写魔搭 API Key'); return }
+  if (!localImageRecognition.value.model) { message.warning('请先选择多模态模型'); return }
   testingImageAPI.value = true
   testResult.value = null
   try {
     const defaultTestImage = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
     const imageBase64 = testImage.value?.base64 || defaultTestImage
-    const result = await recognizeImageWithSiliconFlow({
+    const result = await recognizeImageWithModelScope({
       apiKey: localImageRecognition.value.apiKey,
       baseUrl: localImageRecognition.value.baseUrl,
       model: localImageRecognition.value.model,
@@ -857,14 +792,13 @@ async function testImageAPI() {
   }
 }
 
-// --- 导入导出 ---
 function handleExport() {
   if (exportSelection.value.length === 0) { message.warning('请至少选择一项'); return }
   const exportData = {}
   if (exportSelection.value.includes('doctors')) exportData.doctors = localDoctors.value
   if (exportSelection.value.includes('presetPrompts')) exportData.presetPrompts = localPresetPrompts.value
   if (exportSelection.value.includes('settings')) exportData.settings = localSettings.value
-  if (exportSelection.value.includes('imageRecognition')) exportData.imageRecognition = localImageRecognition.value
+  if (exportSelection.value.includes('imageRecognition')) exportData.imageRecognition = normalizeImageRecognitionConfig(localImageRecognition.value)
   const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
@@ -881,26 +815,36 @@ function handleImport(file) {
     try {
       const data = JSON.parse(e.target.result)
       const imported = []
-      if (data.doctors) { localDoctors.value = JSON.parse(JSON.stringify(data.doctors)); imported.push('医生配置') }
-      if (data.presetPrompts) { localPresetPrompts.value = JSON.parse(JSON.stringify(data.presetPrompts)); imported.push('医生预设提示词') }
-      if (data.settings) { localSettings.value = { ...localSettings.value, ...data.settings }; imported.push('全局设置') }
+      if (data.doctors) {
+        localDoctors.value = data.doctors.map((doctor, index) => normalizeDoctorConfig(doctor, index))
+        imported.push('医生配置')
+      }
+      if (data.presetPrompts) {
+        localPresetPrompts.value = JSON.parse(JSON.stringify(data.presetPrompts))
+        imported.push('医生预设提示词')
+      }
+      if (data.settings) {
+        localSettings.value = { ...localSettings.value, ...data.settings }
+        imported.push('全局设置')
+      }
       if (data.imageRecognition) {
-        localImageRecognition.value = { maxConcurrent: 1, ...JSON.parse(JSON.stringify(data.imageRecognition)) }
+        localImageRecognition.value = normalizeImageRecognitionConfig(data.imageRecognition)
         imported.push('图片识别')
       }
       if (imported.length) message.success(`已导入：${imported.join('、')}`)
       else message.warning('无有效配置项')
-    } catch { message.error('导入失败：文件格式不正确') }
+    } catch {
+      message.error('导入失败：文件格式不正确')
+    }
   }
   reader.readAsText(file)
   return false
 }
 
-// --- 保存 ---
 function onSave() {
   global.setDoctors(localDoctors.value)
   global.setPresetPrompts(localPresetPrompts.value)
-  global.setImageRecognition(localImageRecognition.value)
+  global.setImageRecognition(normalizeImageRecognitionConfig(localImageRecognition.value))
   store.setSettings(localSettings.value)
   calcStorage()
   message.success('已保存全局设置')
@@ -926,7 +870,6 @@ function onSave() {
   font-size: 16px;
 }
 
-/* 医生卡片 */
 .doctor-card {
   border-left: 3px solid #1890ff;
 }
@@ -980,19 +923,16 @@ function onSave() {
   padding: 0 2px;
 }
 
-/* 模型行 */
 .model-row {
   display: flex;
   gap: 6px;
   align-items: center;
 }
 
-/* 提示词行 */
 .prompt-row {
   margin-bottom: 4px;
 }
 
-/* 配置卡片 */
 .config-card :deep(.ant-card-head) {
   min-height: 36px;
   padding: 0 12px;
@@ -1005,7 +945,6 @@ function onSave() {
   padding: 12px;
 }
 
-/* 测试行 */
 .test-row {
   display: flex;
   align-items: center;
@@ -1039,86 +978,72 @@ function onSave() {
 .test-result.error {
   background: #fff2f0;
   border: 1px solid #ffccc7;
-  color: #f5222d;
+  color: #ff4d4f;
 }
 
-/* 导入导出卡片 */
-.action-card :deep(.ant-card-head) {
-  min-height: 36px;
-  font-size: 13px;
+.action-card :deep(.ant-card-body) {
+  padding: 16px;
 }
 
-/* 系统信息卡片 */
-.info-card :deep(.ant-card-head) {
-  min-height: 36px;
-  font-size: 13px;
+.info-card :deep(.ant-card-body) {
+  padding: 12px;
 }
-
-/* 存储信息 */
-.storage-info { }
+.storage-info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
 .storage-bar {
   position: relative;
   height: 20px;
-  background: #f0f0f0;
-  border-radius: 10px;
+  border-radius: 999px;
+  background: #f5f5f5;
   overflow: hidden;
-  margin-bottom: 8px;
 }
 .storage-used {
-  height: 100%;
-  background: linear-gradient(90deg, #1890ff, #52c41a);
-  border-radius: 10px;
-  transition: width 0.3s;
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, #1677ff, #69b1ff);
 }
 .storage-label {
-  position: absolute;
-  inset: 0;
+  position: relative;
+  z-index: 1;
   display: flex;
-  align-items: center;
   justify-content: center;
-  font-size: 11px;
-  color: #fff;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.4);
+  align-items: center;
+  height: 100%;
+  font-size: 12px;
+  color: #262626;
 }
 .storage-details {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
+  flex-direction: column;
   gap: 4px;
 }
 .storage-item {
   display: flex;
   justify-content: space-between;
+  gap: 12px;
   font-size: 12px;
-  padding: 2px 6px;
-  background: #fafafa;
-  border-radius: 3px;
+  color: #595959;
 }
-.storage-key { color: #666; }
-.storage-val { color: #333; font-weight: 500; }
-
-/* 底部保存 */
+.storage-key {
+  color: #262626;
+}
+.storage-val {
+  color: #8c8c8c;
+}
 .modal-footer {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
-  padding-top: 12px;
-  border-top: 1px solid #f0f0f0;
-  margin-top: 4px;
+  margin-top: 16px;
 }
-
-/* 表单项紧凑 */
-:deep(.ant-form-item) { margin-bottom: 10px; }
-:deep(.ant-form-item-label) { padding-bottom: 2px; }
-:deep(.ant-form-item-label > label) { font-size: 12px; color: #666; }
-
-/* 通用 */
-:deep(.ant-card-size-small) { border-radius: 6px; }
-:deep(.ant-tabs-tab) { font-size: 13px; }
-:deep(.ant-alert) { border-radius: 6px; }
-
-.model-select :deep(.ant-select-selector) {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.preset-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 </style>
